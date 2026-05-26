@@ -25,7 +25,9 @@ install:
 	uv pip install bm25s; \
 	uv pip install tqdm; \
 	uv pip install transformers; \
-	uv pip install torch
+	uv pip install torch; \
+	uv pip install numpy; \
+	uv pip install accelerate
 
 
 run:
