@@ -1,7 +1,7 @@
-import bm25s
 import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
+from tqdm import tqdm, trange
 
 
 def calc_and_add_end_index(doc: Document):
@@ -28,7 +28,7 @@ def chunk_vllm_docs(directory: str = './vllm-0.10.1/docs',
             filepath = os.path.join(root, file)
             if (filepath.split('.')[-1] in file_type):
                 doc_files.append(filepath)
-    chunker = RecursiveCharacterTextSplitter(chunk_size=2000,
+    chunker = RecursiveCharacterTextSplitter(chunk_size=maximum_chunk_size,
                                              chunk_overlap=200,
                                              length_function=len,
                                              is_separator_regex=False,
@@ -36,14 +36,15 @@ def chunk_vllm_docs(directory: str = './vllm-0.10.1/docs',
                                              add_start_index=True,
                                              separators=["\n\n",
                                                          '\n', '.', ' ', ''])
-    with open(doc_files[0], 'r', encoding='utf-8') as f:
-        text = f.read()
-
-    doc = chunker.create_documents([text], metadatas=[{"src": doc_files[0]}])
-    doc = list(map(calc_and_add_end_index, doc))
-    # DEBUG MEASURE
-    doc = list(map(str, doc))
-    print("\n".join(doc))
+    docs = []
+    for i in trange(len(doc_files)):
+        with open(doc_files[i], 'r', encoding='utf-8') as f:
+            text = f.read()
+        doc = chunker.create_documents([text], metadatas=[{"src": doc_files[i]}])
+        doc = list(map(calc_and_add_end_index, doc))
+        print()
+        docs.extend(doc)
+    return docs
 
 
 if __name__ == '__main__':
