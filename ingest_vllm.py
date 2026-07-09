@@ -1,51 +1,81 @@
 import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-from tqdm import tqdm, trange
+from tqdm import trange
+from pydantic import BaseModel
 
+class Corpus(BaseModel):
+    '''The corpus must be a list of strings representing the chunked corpus documents'''
+    corpus: list[str]
 
-def calc_and_add_end_index(doc: Document):
-    doc.metadata['end_index'] = doc.metadata.get('start_index', 0) + len(doc.page_content) - 1
-    doc.page_content = doc.page_content.strip('\n \t')
-    return doc
+class Chunker:
+    @staticmethod
+    def calc_and_add_end_index(doc: Document) -> str:
+        doc.metadata['end_index'] = doc.metadata.get('start_index', 0) + len(doc.page_content) - 1
+        doc.page_content = doc.page_content.strip('\n \t')
+        return str(doc)
 
-def chunk_vllm_docs(directory: str = './vllm-0.10.1/docs',
-                    file_type: list[str] | str = ['md', 'txt'],
-                    maximum_chunk_size: int = 2000):
-    if isinstance(file_type, str):
-        file_type = [file_type]
-    if maximum_chunk_size < 500:
-        raise ValueError("minimum chunk size for documents is 500 characters" +
-                         ", recommended size is 1500-2000")
-    elif maximum_chunk_size < 1500:
-        print("Warning: recommended chunk size for documents" +
-              " is 1500-2000 characters")
-    elif maximum_chunk_size > 2000:
-        raise ValueError("Maximum chunk size for documents is 2000 characters")
-    doc_files = []
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            filepath = os.path.join(root, file)
-            if (filepath.split('.')[-1] in file_type):
-                doc_files.append(filepath)
-    chunker = RecursiveCharacterTextSplitter(chunk_size=maximum_chunk_size,
-                                             chunk_overlap=200,
-                                             length_function=len,
-                                             is_separator_regex=False,
-                                             strip_whitespace=False,
-                                             add_start_index=True,
-                                             separators=["\n\n",
-                                                         '\n', '.', ' ', ''])
-    docs = []
-    for i in trange(len(doc_files)):
-        with open(doc_files[i], 'r', encoding='utf-8') as f:
-            text = f.read()
-        doc = chunker.create_documents([text], metadatas=[{"src": doc_files[i]}])
-        doc = list(map(calc_and_add_end_index, doc))
-        print()
-        docs.extend(doc)
-    return docs
+    def chunk_vllm_docs(self, directory: str = './data/raw/',
+                        file_type: list[str] | str = ['md', 'txt'],
+                        maximum_chunk_size: int = 2000) -> Corpus:
+        if isinstance(file_type, str):
+            file_type = [file_type]
+        if maximum_chunk_size < 1000:
+            raise ValueError("minimum chunk size for documents is 1000 characters" +
+                            ", recommended size is 1500-2000")
+        elif maximum_chunk_size < 1500:
+            print("Warning: recommended chunk size for documents" +
+                " is 1500-2000 characters")
+        elif maximum_chunk_size > 2000:
+            raise ValueError("Maximum chunk size for documents is 2000 characters")
+        doc_files = []
+        for root, _, files in os.walk(directory):
+            for file in files:
+                filepath = os.path.join(root, file)
+                if (filepath.split('.')[-1] in file_type):
+                    doc_files.append(filepath)
+        doc_chunker = RecursiveCharacterTextSplitter(chunk_size=maximum_chunk_size,
+                                                chunk_overlap=200,
+                                                length_function=len,
+                                                is_separator_regex=False,
+                                                strip_whitespace=False,
+                                                add_start_index=True,
+                                                separators=["\n\n",
+                                                            '\n', '.', ' ', ''])
+        docs = []
+        for i in trange(len(doc_files)):
+            with open(doc_files[i], 'r', encoding='utf-8') as f:
+                text = f.read()
+            doc = doc_chunker.create_documents([text], metadatas=[{"src": doc_files[i]}])
+            doc = list(map(self.calc_and_add_end_index, doc))
+            docs.extend(doc)
+        corpus = Corpus(corpus=docs)
+        return corpus
 
-
-if __name__ == '__main__':
-    chunk_vllm_docs()
+    def chunk_vllm_code(self, directory: str = './data/raw/', file_type: list[str] | str = 'py', maximum_chunk_size: int = 2000) -> Corpus:
+        if isinstance(file_type, str):
+            file_type = [file_type]
+        if maximum_chunk_size != 2000:
+            raise ValueError("Code chunks must have a maximum size of 2000")
+        code_files = []
+        for root, _, files in os.walk(directory):
+            for file in files:
+                filepath = os.path.join(root, file)
+                if filepath.split('.')[-1] in file_type:
+                    code_files.append(filepath)
+        code_chunker = RecursiveCharacterTextSplitter(chunk_size=maximum_chunk_size,
+                                                      chunk_overlap=0,
+                                                      length_function=len,
+                                                      is_separator_regex=False,
+                                                      strip_whitespace=False,
+                                                      add_start_index=True,
+                                                      separators=["\n\n", '\n', ';', ' ', ''])
+        docs = []
+        for i in trange(len(code_files)):
+            with open(code_files[i], "r", encoding='utf-8') as f:
+                code = f.read()
+            doc = code_chunker.create_documents([code], metadatas=[{'src': code_files[i]}])
+            doc = list(map(self.calc_and_add_end_index, doc))
+            docs.extend(doc)
+        corpus = Corpus(corpus=docs)
+        return corpus
