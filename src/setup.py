@@ -1,4 +1,4 @@
-from ingest_vllm import Chunker
+from src.ingest_vllm import Chunker
 import torch
 import bm25s
 import Stemmer

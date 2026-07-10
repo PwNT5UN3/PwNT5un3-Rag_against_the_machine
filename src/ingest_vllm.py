@@ -1,5 +1,5 @@
 import os
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter, CharacterTextSplitter
 from langchain_core.documents import Document
 from tqdm import trange
 from pydantic import BaseModel
@@ -34,14 +34,7 @@ class Chunker:
                 filepath = os.path.join(root, file)
                 if (filepath.split('.')[-1] in file_type):
                     doc_files.append(filepath)
-        doc_chunker = RecursiveCharacterTextSplitter(chunk_size=maximum_chunk_size,
-                                                chunk_overlap=200,
-                                                length_function=len,
-                                                is_separator_regex=False,
-                                                strip_whitespace=False,
-                                                add_start_index=True,
-                                                separators=["\n\n",
-                                                            '\n', '.', ' ', ''])
+        doc_chunker =CharacterTextSplitter(chunk_size=maximum_chunk_size, chunk_overlap=200)
         docs = []
         for i in trange(len(doc_files)):
             with open(doc_files[i], 'r', encoding='utf-8') as f:
@@ -79,3 +72,9 @@ class Chunker:
             docs.extend(doc)
         corpus = Corpus(corpus=docs)
         return corpus
+
+if __name__ == "__main__":
+    c = Chunker()
+    for i in c.chunk_vllm_docs().corpus:
+        print(i)
+        print('\n----------------------------------------\n')
