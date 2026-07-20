@@ -6,14 +6,14 @@ from pydantic import BaseModel
 
 class Corpus(BaseModel):
     '''The corpus must be a list of strings representing the chunked corpus documents'''
-    corpus: list[str]
+    corpus: list[dict]
 
 class Chunker:
     @staticmethod
-    def calc_and_add_end_index(doc: Document) -> str:
+    def calc_and_add_end_index(doc: Document) -> dict:
         doc.metadata['end_index'] = doc.metadata.get('start_index', 0) + len(doc.page_content) - 1
         doc.page_content = doc.page_content.strip('\n \t')
-        return str(doc)
+        return {'content': doc.page_content, 'metadata': doc.metadata}
 
     def chunk_vllm_docs(self, directory: str = './data/raw/',
                         file_type: list[str] | str = ['md', 'txt'],
@@ -34,12 +34,12 @@ class Chunker:
                 filepath = os.path.join(root, file)
                 if (filepath.split('.')[-1] in file_type):
                     doc_files.append(filepath)
-        doc_chunker =CharacterTextSplitter(chunk_size=maximum_chunk_size, chunk_overlap=200)
+        doc_chunker =CharacterTextSplitter(chunk_size=maximum_chunk_size, chunk_overlap=400, separator=" ", add_start_index=True)
         docs = []
-        for i in trange(len(doc_files)):
+        for i in trange(len(doc_files), desc="Chunking doc files..."):
             with open(doc_files[i], 'r', encoding='utf-8') as f:
                 text = f.read()
-            doc = doc_chunker.create_documents([text], metadatas=[{"src": doc_files[i]}])
+            doc = doc_chunker.create_documents([text], metadatas=[{"src": doc_files[i][2:]}])
             doc = list(map(self.calc_and_add_end_index, doc))
             docs.extend(doc)
         corpus = Corpus(corpus=docs)
@@ -57,24 +57,18 @@ class Chunker:
                 if filepath.split('.')[-1] in file_type:
                     code_files.append(filepath)
         code_chunker = RecursiveCharacterTextSplitter(chunk_size=maximum_chunk_size,
-                                                      chunk_overlap=0,
+                                                      chunk_overlap=400,
                                                       length_function=len,
                                                       is_separator_regex=False,
                                                       strip_whitespace=False,
                                                       add_start_index=True,
                                                       separators=["\n\n", '\n', ';', ' ', ''])
         docs = []
-        for i in trange(len(code_files)):
+        for i in trange(len(code_files), desc="chunking code files..."):
             with open(code_files[i], "r", encoding='utf-8') as f:
                 code = f.read()
-            doc = code_chunker.create_documents([code], metadatas=[{'src': code_files[i]}])
+            doc = code_chunker.create_documents([code], metadatas=[{'src': code_files[i][2:]}])
             doc = list(map(self.calc_and_add_end_index, doc))
             docs.extend(doc)
         corpus = Corpus(corpus=docs)
         return corpus
-
-if __name__ == "__main__":
-    c = Chunker()
-    for i in c.chunk_vllm_docs().corpus:
-        print(i)
-        print('\n----------------------------------------\n')
