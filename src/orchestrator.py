@@ -3,7 +3,7 @@ import torch
 import bm25s
 import Stemmer
 from transformers import AutoModelForCausalLM
-from helpers import streamline_query
+from helpers import streamline_query, clean_text_chunks
 
 class RagAgainstTheMachine:
     """main orchestrator, all commands are defined here"""
@@ -28,12 +28,12 @@ class RagAgainstTheMachine:
             raise RuntimeError("Could not fetch model, are you connected to the internet?")
     
     def index_docs(self):
-        doc_corpus = self.chunker.chunk_vllm_docs(self=self.chunker).corpus
-        code_corpus = self.chunker.chunk_vllm_code(self=self.chunker).corpus
-        self.docs_doc.extend(d.get('content') for d in doc_corpus)
+        doc_corpus = self.chunker.chunk_vllm_docs(self=self.chunker)
+        code_corpus = self.chunker.chunk_vllm_code(self=self.chunker)
+        self.docs_doc.extend(clean_text_chunks(d.get('content')) for d in doc_corpus)
         self.docs_code.extend(d.get('content') for d in code_corpus)
-        self.metadata_doc.extend(d.get('metadata') for d in doc_corpus)
-        self.metadata_code.extend(d.get('metadata') for d in code_corpus)
+        self.metadata_doc.extend(d.get('src') for d in doc_corpus)
+        self.metadata_code.extend(d.get('src') for d in code_corpus)
         if self.docs_doc == [] and self.docs_code == []:
             raise Exception("Corpus is empty, please make sure to pass " +
                             "the correct corpus folder")
@@ -45,6 +45,8 @@ class RagAgainstTheMachine:
         self.retriever_docs.index(docs_tokens)
         self.retriever_code.index(code_tokens)
         self.indexed_corpus = True
+        for i in self.docs_doc:
+            print(i)
     
     def answer_question_test(self):
         query = input("Query: ")
@@ -75,4 +77,4 @@ class RagAgainstTheMachine:
 if __name__ == "__main__":
     rag = RagAgainstTheMachine()
     rag.index_docs()
-    rag.answer_question_test()
+    # rag.answer_question_test()

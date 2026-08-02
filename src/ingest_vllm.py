@@ -2,11 +2,7 @@ import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter, CharacterTextSplitter
 from langchain_core.documents import Document
 from tqdm import trange
-from pydantic import BaseModel
-
-class Corpus(BaseModel):
-    '''The corpus must be a list of strings representing the chunked corpus documents'''
-    corpus: list[dict]
+from pydantic_models import MinimalSource
 
 class Chunker:
     @staticmethod
@@ -17,7 +13,7 @@ class Chunker:
 
     def chunk_vllm_docs(self, directory: str = './data/raw/',
                         file_type: list[str] | str = ['md', 'txt'],
-                        maximum_chunk_size: int = 2000) -> Corpus:
+                        maximum_chunk_size: int = 2000) -> list:
         if isinstance(file_type, str):
             file_type = [file_type]
         if maximum_chunk_size < 1000:
@@ -42,10 +38,12 @@ class Chunker:
             doc = doc_chunker.create_documents([text], metadatas=[{"src": doc_files[i][2:]}])
             doc = list(map(self.calc_and_add_end_index, doc))
             docs.extend(doc)
-        corpus = Corpus(corpus=docs)
+        corpus = []
+        for doc in docs:
+            corpus.append({"src": MinimalSource(file_path=doc["metadata"]["src"], first_character_index=doc["metadata"]["start_index"], last_character_index=doc["metadata"]["end_index"]), "content": doc["content"]})
         return corpus
 
-    def chunk_vllm_code(self, directory: str = './data/raw/', file_type: list[str] | str = 'py', maximum_chunk_size: int = 2000) -> Corpus:
+    def chunk_vllm_code(self, directory: str = './data/raw/', file_type: list[str] | str = 'py', maximum_chunk_size: int = 2000) -> list:
         if isinstance(file_type, str):
             file_type = [file_type]
         if maximum_chunk_size != 2000:
@@ -70,5 +68,11 @@ class Chunker:
             doc = code_chunker.create_documents([code], metadatas=[{'src': code_files[i][2:]}])
             doc = list(map(self.calc_and_add_end_index, doc))
             docs.extend(doc)
-        corpus = Corpus(corpus=docs)
+        corpus = []
+        for doc in docs:
+            corpus.append({"src": MinimalSource(file_path=doc["metadata"]["src"], first_character_index=doc["metadata"]["start_index"], last_character_index=doc["metadata"]["end_index"]), "content": doc["content"]})
         return corpus
+
+if __name__ == "__main__":
+    chunker = Chunker()
+    chunker.chunk_vllm_docs()

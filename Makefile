@@ -29,7 +29,7 @@ install:
 	uv pip install numpy; \
 	uv pip install accelerate; \
 	uv pip install langchain_core; \
-	uv pip install -qU langchain-text-splitters
+	uv pip install -qU langchain-text-splitters 
 
 
 run:
