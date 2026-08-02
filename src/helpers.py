@@ -1,7 +1,9 @@
 import re
 
 
-_QUESTION_WORDS = []
+_QUESTION_WORDS = ["what", "is", "are", "how", "does", "do", "why", "when",
+    "where", "which", "who", "the", "a", "an", "in", "of",
+    "for", "to", "and", "explain", "describe", "tell", "me", "about"]
 
 def streamline_query(query: str):
     query = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", query)
