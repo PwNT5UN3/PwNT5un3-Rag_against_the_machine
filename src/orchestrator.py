@@ -27,14 +27,22 @@ class RagAgainstTheMachine:
         except RuntimeError:
             raise RuntimeError("Could not fetch model, are you connected to the internet?")
     
-    def index_docs(self):
-        doc_corpus = self.chunker.chunk_vllm_docs(self=self.chunker)
-        code_corpus = self.chunker.chunk_vllm_code(self=self.chunker)
+    def index_docs(self, maximum_chunk_size: int = 2000):
+        if maximum_chunk_size < 1000:
+            raise ValueError("minimum chunk size is 1000 characters" +
+                ", recommended size is 1500-2000")
+        elif maximum_chunk_size < 1500:
+            print("Warning: recommended chunk size for" +
+                        " is 1500-2000 characters")
+        elif maximum_chunk_size > 2000:
+            raise ValueError("Maximum chunk size is 2000 characters")
+        doc_corpus = self.chunker.chunk_vllm_docs(self=self.chunker, maximum_chunk_size=maximum_chunk_size)
+        code_corpus = self.chunker.chunk_vllm_code(self=self.chunker, maximum_chunk_size=maximum_chunk_size)
         self.docs_doc.extend(clean_text_chunks(d.get('content')) for d in doc_corpus)
         self.docs_code.extend(d.get('content') for d in code_corpus)
         self.metadata_doc.extend(d.get('src') for d in doc_corpus)
         self.metadata_code.extend(d.get('src') for d in code_corpus)
-        if self.docs_doc == [] and self.docs_code == []:
+        if self.docs_doc == [] or self.docs_code == []:
             raise Exception("Corpus is empty, please make sure to pass " +
                             "the correct corpus folder")
         stemmer = Stemmer.Stemmer('english')
@@ -45,8 +53,6 @@ class RagAgainstTheMachine:
         self.retriever_docs.index(docs_tokens)
         self.retriever_code.index(code_tokens)
         self.indexed_corpus = True
-        for i in self.docs_doc:
-            print(i)
     
     def answer_question_test(self):
         query = input("Query: ")
@@ -77,4 +83,4 @@ class RagAgainstTheMachine:
 if __name__ == "__main__":
     rag = RagAgainstTheMachine()
     rag.index_docs()
-    # rag.answer_question_test()
+    rag.answer_question_test()

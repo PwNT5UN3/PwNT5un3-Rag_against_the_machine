@@ -11,31 +11,38 @@ class Chunker:
         doc.page_content = doc.page_content.strip('\n \t')
         return {'content': doc.page_content, 'metadata': doc.metadata}
 
+    def chunk_text(self, file_name: str, max_chunk: int, text: str) -> list:
+        if not text or text.strip():
+            return []
+        if text <= max_chunk:
+            return [Document(text, metadata={'start_index': 0, 'src': file_name})]
+        doc_chunker = RecursiveCharacterTextSplitter(chunk_size=max_chunk,
+                                                              chunk_overlap=400,
+                                                              length_function=len,
+                                                              is_separator_regex=False,
+                                                              strip_whitespace=False,
+                                                              add_start_index=True,
+                                                              separators=["#", "\n\n", '\n', ';', ' ', ''])
+        docs = doc_chunker.create_documents([text], metadatas=[{"src": file_name}])
+        return docs
+
     def chunk_vllm_docs(self, directory: str = './data/raw/',
                         file_type: list[str] | str = ['md', 'txt'],
                         maximum_chunk_size: int = 2000) -> list:
         if isinstance(file_type, str):
             file_type = [file_type]
-        if maximum_chunk_size < 1000:
-            raise ValueError("minimum chunk size for documents is 1000 characters" +
-                            ", recommended size is 1500-2000")
-        elif maximum_chunk_size < 1500:
-            print("Warning: recommended chunk size for documents" +
-                " is 1500-2000 characters")
-        elif maximum_chunk_size > 2000:
-            raise ValueError("Maximum chunk size for documents is 2000 characters")
+        
         doc_files = []
         for root, _, files in os.walk(directory):
             for file in files:
                 filepath = os.path.join(root, file)
                 if (filepath.split('.')[-1] in file_type):
                     doc_files.append(filepath)
-        doc_chunker =CharacterTextSplitter(chunk_size=maximum_chunk_size, chunk_overlap=400, separator=" ", add_start_index=True)
         docs = []
         for i in trange(len(doc_files), desc="Chunking doc files..."):
             with open(doc_files[i], 'r', encoding='utf-8') as f:
                 text = f.read()
-            doc = doc_chunker.create_documents([text], metadatas=[{"src": doc_files[i][2:]}])
+            doc = self.chunk_text(doc_files[i][2:], maximum_chunk_size, text) 
             doc = list(map(self.calc_and_add_end_index, doc))
             docs.extend(doc)
         corpus = []
@@ -43,31 +50,32 @@ class Chunker:
             corpus.append({"src": MinimalSource(file_path=doc["metadata"]["src"], first_character_index=doc["metadata"]["start_index"], last_character_index=doc["metadata"]["end_index"]), "content": doc["content"]})
         return corpus
 
+    def chunk_python(self, file_name: str, max_chunk: int, text: str) -> list:
+        if not text or text.strip():
+            return []
+        if text <= max_chunk:
+            return [Document(text, metadata={'start_index': 0, 'src': file_name})]
+        docs = []
+        return docs
+
     def chunk_vllm_code(self, directory: str = './data/raw/', file_type: list[str] | str = 'py', maximum_chunk_size: int = 2000) -> list:
         if isinstance(file_type, str):
             file_type = [file_type]
-        if maximum_chunk_size != 2000:
-            raise ValueError("Code chunks must have a maximum size of 2000")
         code_files = []
         for root, _, files in os.walk(directory):
             for file in files:
                 filepath = os.path.join(root, file)
                 if filepath.split('.')[-1] in file_type:
                     code_files.append(filepath)
-        code_chunker = RecursiveCharacterTextSplitter(chunk_size=maximum_chunk_size,
-                                                      chunk_overlap=400,
-                                                      length_function=len,
-                                                      is_separator_regex=False,
-                                                      strip_whitespace=False,
-                                                      add_start_index=True,
-                                                      separators=["\n\n", '\n', ';', ' ', ''])
         docs = []
         for i in trange(len(code_files), desc="chunking code files..."):
             with open(code_files[i], "r", encoding='utf-8') as f:
                 code = f.read()
-            doc = code_chunker.create_documents([code], metadatas=[{'src': code_files[i][2:]}])
+            doc = self.chunk_python(code_files[i][2:], maximum_chunk_size, code)
             doc = list(map(self.calc_and_add_end_index, doc))
+            print(doc)
             docs.extend(doc)
+        print(docs)
         corpus = []
         for doc in docs:
             corpus.append({"src": MinimalSource(file_path=doc["metadata"]["src"], first_character_index=doc["metadata"]["start_index"], last_character_index=doc["metadata"]["end_index"]), "content": doc["content"]})
