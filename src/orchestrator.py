@@ -15,7 +15,6 @@ class RagAgainstTheMachine:
         self.metadata_doc = []
         self.docs_code = []
         self.metadata_code = []
-        self.chunker = Chunker
         self.retriever_docs = bm25s.BM25()
         self.retriever_code = bm25s.BM25()
         self.indexed_corpus = False
@@ -46,11 +45,10 @@ class RagAgainstTheMachine:
             )
         elif maximum_chunk_size > 2000:
             raise ValueError("Maximum chunk size is 2000 characters")
-        doc_corpus = self.chunker.chunk_vllm_docs(
-            self=self.chunker, maximum_chunk_size=maximum_chunk_size
+        doc_corpus = Chunker.chunk_vllm_docs(
+            maximum_chunk_size=maximum_chunk_size
         )
-        code_corpus = self.chunker.chunk_vllm_code(
-            self=self.chunker, maximum_chunk_size=maximum_chunk_size
+        code_corpus = Chunker.chunk_vllm_code(maximum_chunk_size=maximum_chunk_size
         )
         self.docs_doc.extend(
             clean_text_chunks(d.get("content")) for d in doc_corpus
