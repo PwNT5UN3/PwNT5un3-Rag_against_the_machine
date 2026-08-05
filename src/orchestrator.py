@@ -114,7 +114,7 @@ class RagAgainstTheMachine:
             ]
             print("Retrieved:")
             for c, m in context_docs:
-                print("\n", m, "\n--------------------------------\n")
+                print("\n", m, "\n---------------------------------\n")
 
 
 if __name__ == "__main__":
