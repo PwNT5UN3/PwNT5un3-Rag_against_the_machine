@@ -5,7 +5,7 @@ import Stemmer
 from transformers import AutoModelForCausalLM
 from helpers import streamline_query, clean_text_chunks
 import json
-from pydantic_models import MinimalSource, MinimalSearchResults, UnansweredQuestion
+from pydantic_models import MinimalSource, MinimalSearchResults, UnansweredQuestion, StudentSearchResults
 
 
 class RagAgainstTheMachine:
@@ -87,11 +87,18 @@ class RagAgainstTheMachine:
             self.metadata[doc]
             for doc, _ in retrieved
         ]
-        for d in context_docs:
-            print(isinstance(d), MinimalSource)
-        
+        return MinimalSearchResults(question_id=question.question_id, question=question.question, retrieved_sources=context_docs)
 
-
+    def search_set(self, set_file: str, k: int = 5, save: str = "./search_results.json"):
+        with open(set_file) as f:
+            d = json.load(f)
+        results = []
+        question_set = d.get("rag_questions", [])
+        for question in question_set:
+            results.append(self.search(question.get("question", ''), k, question.get("question_id", "")))
+        file = StudentSearchResults(search_results=results, k=k).model_dump(mode="json")
+        with open(save, "w") as f:
+            json.dump(file, f)
 
     def answer_question_test(self):
         while True:
@@ -120,4 +127,4 @@ class RagAgainstTheMachine:
 if __name__ == "__main__":
     rag = RagAgainstTheMachine()
     rag.index_docs()
-    rag.search("abbb")
+    print(rag.search_set('./datasets_public/public/UnansweredQuestions/dataset_docs_public.json', save="code.json"))
