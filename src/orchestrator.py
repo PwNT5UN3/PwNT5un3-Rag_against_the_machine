@@ -5,6 +5,7 @@ import Stemmer
 from transformers import AutoModelForCausalLM
 from helpers import streamline_query, clean_text_chunks
 import json
+from pydantic_models import MinimalSource, MinimalSearchResults, UnansweredQuestion
 
 
 class RagAgainstTheMachine:
@@ -67,6 +68,31 @@ class RagAgainstTheMachine:
         self.retriever.index(tokens)
         self.indexed_corpus = True
 
+    def search(self, query: str, k: int = 5, id: str = ""):
+        if id:
+            question = UnansweredQuestion(question_id=id, question=query)
+        else:
+            question = UnansweredQuestion(question=query)
+        if query.strip() == "":
+            return MinimalSearchResults(question_id=question.question_id, question=question.question, retrieved_sources=[])
+        query = streamline_query(query)
+        results, scores = self.retriever.retrieve(
+            bm25s.tokenize(query), k=k
+        )
+        retrieved = []
+        for i in range(results.shape[1]):
+            doc, score = results[0, i], scores[0, i]
+            retrieved.append((doc, score))
+        context_docs = [
+            self.metadata[doc]
+            for doc, _ in retrieved
+        ]
+        for d in context_docs:
+            print(isinstance(d), MinimalSource)
+        
+
+
+
     def answer_question_test(self):
         while True:
             query = input("Query: ")
@@ -94,4 +120,4 @@ class RagAgainstTheMachine:
 if __name__ == "__main__":
     rag = RagAgainstTheMachine()
     rag.index_docs()
-    rag.answer_question_test()
+    rag.search("abbb")
