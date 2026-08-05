@@ -27,13 +27,18 @@ _QUESTION_WORDS = [
     "about",
     "i",
     "you",
+    "used",
+    "using",
+    "wether"
 ]
 
 
 def streamline_query(query: str):
+    query = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", query)
     query = re.sub(r"[^\w\s]", " ", query)
+    query = re.sub(r"[^\w\s]|(?<!\w)_|_(?!\w)", " ", query)
     words = query.lower().split(" ")
-    query = " ".join([word for word in words if word not in _QUESTION_WORDS])
+    query = " ".join([word for word in words if word not in _QUESTION_WORDS and len(word) >= 2])
     return query
 
 

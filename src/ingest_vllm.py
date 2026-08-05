@@ -29,13 +29,13 @@ class Chunker:
             ]
         doc_chunker = RecursiveCharacterTextSplitter(
             chunk_size=max_chunk,
-            chunk_overlap=400,
+            chunk_overlap=min(200, max_chunk // 10),
             length_function=len,
             is_separator_regex=False,
             strip_whitespace=False,
             add_start_index=True,
             separators=(
-                ["#", "\n\n", "\n", ";", " ", ""]
+                ["\n# ", "\n## ", "\n### ", "\n#### ", "\n\n", "\n", ";", " ", ""]
                 if is_text
                 else ["\n\n", "\n", ";", " ", ""]
             ),
