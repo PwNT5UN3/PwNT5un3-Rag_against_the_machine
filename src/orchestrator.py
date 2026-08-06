@@ -1,11 +1,18 @@
 from ingest_vllm import Chunker
-import torch
+
+# import torch
 import bm25s
 import Stemmer
-from transformers import AutoModelForCausalLM
+
+# from transformers import AutoModelForCausalLM
 from helpers import streamline_query, clean_text_chunks
 import json
-from pydantic_models import MinimalSource, MinimalSearchResults, UnansweredQuestion, StudentSearchResults
+from pydantic_models import (
+    MinimalSource,
+    MinimalSearchResults,
+    UnansweredQuestion,
+    StudentSearchResults,
+)
 
 
 class RagAgainstTheMachine:
@@ -16,19 +23,19 @@ class RagAgainstTheMachine:
         self.metadata = []
         self.retriever = bm25s.BM25()
         self.indexed_corpus = False
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        try:
-            self.llm = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                dtype=(
-                    torch.float16 if self.device == "cuda" else torch.float32
-                ),
-                device_map="auto" if self.device == "cuda" else None,
-            ).to(self.device)
-        except RuntimeError:
-            raise RuntimeError(
-                "Could not fetch model, are you connected to the internet?"
-            )
+        # self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # try:
+        #     self.llm = AutoModelForCausalLM.from_pretrained(
+        #         model_name,
+        #         dtype=(
+        #             torch.float16 if self.device == "cuda" else torch.float32
+        #         ),
+        #         device_map="auto" if self.device == "cuda" else None,
+        #     ).to(self.device)
+        # except RuntimeError:
+        #     raise RuntimeError(
+        #         "Could not fetch model, are you connected to the internet?"
+        #     )
 
     def index_docs(self, maximum_chunk_size: int = 2000):
         if maximum_chunk_size < 1000:
@@ -46,11 +53,10 @@ class RagAgainstTheMachine:
         doc_corpus = Chunker.chunk_vllm_docs(
             maximum_chunk_size=maximum_chunk_size
         )
-        code_corpus = Chunker.chunk_vllm_code(maximum_chunk_size=maximum_chunk_size
+        code_corpus = Chunker.chunk_vllm_code(
+            maximum_chunk_size=maximum_chunk_size
         )
-        self.docs.extend(
-            clean_text_chunks(d.get("content")) for d in doc_corpus
-        )
+        self.docs.extend(d.get("content") for d in doc_corpus)
         self.docs.extend(d.get("content") for d in code_corpus)
         self.metadata.extend(d.get("src") for d in doc_corpus)
         self.metadata.extend(d.get("src") for d in code_corpus)
@@ -64,7 +70,10 @@ class RagAgainstTheMachine:
         stemmer = Stemmer.Stemmer("english")
         print("\nTokenizing chunked documents...\n")
         tokens = bm25s.tokenize(
-            self.docs, stopwords="en", stemmer=stemmer
+            [clean_text_chunks(d) for d in self.docs],
+            stopwords="en",
+            stemmer=stemmer,
+            lower=False,
         )
         print("\nIndexing chunked documents...\n")
         self.retriever.index(tokens)
@@ -76,29 +85,42 @@ class RagAgainstTheMachine:
         else:
             question = UnansweredQuestion(question=query)
         if query.strip() == "":
-            return MinimalSearchResults(question_id=question.question_id, question=question.question, retrieved_sources=[])
+            return MinimalSearchResults(
+                question_id=question.question_id,
+                question=question.question,
+                retrieved_sources=[],
+            )
         query = streamline_query(query)
-        results, scores = self.retriever.retrieve(
-            bm25s.tokenize(query), k=k
-        )
+        results, scores = self.retriever.retrieve(bm25s.tokenize(query), k=k)
         retrieved = []
         for i in range(results.shape[1]):
             doc, score = results[0, i], scores[0, i]
             retrieved.append((doc, score))
-        context_docs = [
-            self.metadata[doc]
-            for doc, _ in retrieved
-        ]
-        return MinimalSearchResults(question_id=question.question_id, question=question.question, retrieved_sources=context_docs)
+        context_docs = [self.metadata[doc] for doc, _ in retrieved]
+        return MinimalSearchResults(
+            question_id=question.question_id,
+            question=question.question,
+            retrieved_sources=context_docs,
+        )
 
-    def search_set(self, set_file: str, k: int = 5, save: str = "./search_results.json"):
+    def search_set(
+        self, set_file: str, k: int = 5, save: str = "./search_results.json"
+    ):
         with open(set_file) as f:
             d = json.load(f)
         results = []
         question_set = d.get("rag_questions", [])
         for question in question_set:
-            results.append(self.search(question.get("question", ''), k, question.get("question_id", "")))
-        file = StudentSearchResults(search_results=results, k=k).model_dump(mode="json")
+            results.append(
+                self.search(
+                    question.get("question", ""),
+                    k,
+                    question.get("question_id", ""),
+                )
+            )
+        file = StudentSearchResults(search_results=results, k=k).model_dump(
+            mode="json"
+        )
         with open(save, "w") as f:
             json.dump(file, f)
 
@@ -118,8 +140,7 @@ class RagAgainstTheMachine:
                 print(f"Rank {i+1} (score: {score:.2f}): {doc}")
                 retrieved.append((doc, score))
             context_docs = [
-                ([self.docs[doc], self.metadata[doc]])
-                for doc, _ in retrieved
+                ([self.docs[doc], self.metadata[doc]]) for doc, _ in retrieved
             ]
             print("Retrieved:")
             for c, m in context_docs:
@@ -129,4 +150,14 @@ class RagAgainstTheMachine:
 if __name__ == "__main__":
     rag = RagAgainstTheMachine()
     rag.index_docs()
-    print(rag.search_set('./datasets_public/public/UnansweredQuestions/dataset_docs_public.json', save="code.json"))
+    rag.search_set(
+        "./datasets_public/public/UnansweredQuestions/dataset_docs_public.json",
+        save="docs.json",
+        k=10,
+    )
+    rag.search_set(
+        "./datasets_public/public/UnansweredQuestions/dataset_code_public.json",
+        save="code.json",
+        k=10,
+    )
+    print(rag.search("How do you configure data parallel deployment in vLLM?"))

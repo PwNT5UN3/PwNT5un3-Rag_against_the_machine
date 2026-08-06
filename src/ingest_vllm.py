@@ -7,7 +7,7 @@ import ast
 
 
 class Chunker:
-    
+
     @staticmethod
     def calc_and_add_end_index(doc: Document) -> dict:
         if not doc.metadata.get("end_index"):
@@ -35,7 +35,16 @@ class Chunker:
             strip_whitespace=True,
             add_start_index=True,
             separators=(
-                ["\n# ", "\n## ", "\n### ", "\n#### ", "\n\n", "\n", " ", ""]
+                [
+                    "\n# ",
+                    "\n## ",
+                    "\n### ",
+                    "\n#### ",
+                    "\n\n",
+                    "\n",
+                    " ",
+                    "",
+                ]
                 if file_name.split(".")[-1] == "md"
                 else ["\n\n", "\n", " ", ""]
             ),
@@ -107,8 +116,24 @@ class Chunker:
         for line in lines:
             offsets.append(offset)
             offset += len(line)
-        top_level = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and hasattr(node, "lineno")]
-        true_top_level = [node for node in top_level if not any(other is not node and other.lineno <= node.lineno and getattr(other, "end_lineno", 0) > node.lineno for other in top_level)]
+        top_level = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(
+                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+            )
+            and hasattr(node, "lineno")
+        ]
+        true_top_level = [
+            node
+            for node in top_level
+            if not any(
+                other is not node
+                and other.lineno <= node.lineno
+                and getattr(other, "end_lineno", 0) > node.lineno
+                for other in top_level
+            )
+        ]
         true_top_level.sort(key=lambda x: x.lineno)
         if not true_top_level:
             return Chunker.chunk_text(file_name, max_chunk, text, False)
@@ -117,7 +142,9 @@ class Chunker:
         if first_node_start > 0:
             prefix = text[first_node_start].strip()
             if prefix:
-                docs.extend(Chunker.chunk_text(file_name, max_chunk, prefix, False))
+                docs.extend(
+                    Chunker.chunk_text(file_name, max_chunk, prefix, False)
+                )
         for node in true_top_level:
             node_start = offsets[node.lineno - 1]
             end_lineno = getattr(node, "end_lineno", node.lineno)
@@ -127,11 +154,33 @@ class Chunker:
                 node_end = len(text)
             node_text = text[node_start:node_end]
             if len(node_text) <= max_chunk:
-                docs.append(Document(node_text, metadata={"start_index": node_start, "end_index": node_end, "src": file_name}))
+                docs.append(
+                    Document(
+                        node_text,
+                        metadata={
+                            "start_index": node_start,
+                            "end_index": node_end,
+                            "src": file_name,
+                        },
+                    )
+                )
             else:
-                sub_chunks = Chunker.chunk_text(file_name, max_chunk, node_text, False)
+                sub_chunks = Chunker.chunk_text(
+                    file_name, max_chunk, node_text, False
+                )
                 for chunk in sub_chunks:
-                    docs.append(Document(chunk.page_content, metadata={"src": file_name, "start_index": chunk.metadata.get("start_index", -1) + node_start}))
+                    docs.append(
+                        Document(
+                            chunk.page_content,
+                            metadata={
+                                "src": file_name,
+                                "start_index": chunk.metadata.get(
+                                    "start_index", -1
+                                )
+                                + node_start,
+                            },
+                        )
+                    )
         return docs
 
     @staticmethod
