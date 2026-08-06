@@ -12,7 +12,7 @@ class Chunker:
     def calc_and_add_end_index(doc: Document) -> dict:
         if not doc.metadata.get("end_index"):
             doc.metadata["end_index"] = (
-                doc.metadata.get("start_index", 0) + len(doc.page_content) - 1
+                doc.metadata.get("start_index", 0) + len(doc.page_content)
             )
         doc.page_content = doc.page_content.strip("\n \t")
         return {"content": doc.page_content, "metadata": doc.metadata}
@@ -25,19 +25,19 @@ class Chunker:
             return []
         if len(text) <= max_chunk:
             return [
-                Document(text, metadata={"start_index": 0, "src": file_name})
+                Document(text.strip(), metadata={"start_index": text.find(text.strip(), 0), "src": file_name})
             ]
         doc_chunker = RecursiveCharacterTextSplitter(
             chunk_size=max_chunk,
             chunk_overlap=min(200, max_chunk // 10),
             length_function=len,
             is_separator_regex=False,
-            strip_whitespace=False,
+            strip_whitespace=True,
             add_start_index=True,
             separators=(
-                ["\n# ", "\n## ", "\n### ", "\n#### ", "\n\n", "\n", ";", " ", ""]
-                if is_text
-                else ["\n\n", "\n", ";", " ", ""]
+                ["\n# ", "\n## ", "\n### ", "\n#### ", "\n\n", "\n", " ", ""]
+                if file_name.split(".")[-1] == "md"
+                else ["\n\n", "\n", " ", ""]
             ),
         )
         docs = doc_chunker.create_documents(
@@ -95,7 +95,7 @@ class Chunker:
             return []
         if len(text) <= max_chunk:
             return [
-                Document(text, metadata={"start_index": 0, "src": file_name})
+                Document(text.strip(), metadata={"start_index": text.find(text.strip(), 0), "src": file_name})
             ]
         try:
             tree = ast.parse(text)

@@ -59,6 +59,8 @@ class RagAgainstTheMachine:
                 "Corpus is empty, please make sure to pass "
                 + "the correct corpus folder"
             )
+        with open("chunks.json", "w", encoding="utf-8") as f:
+            json.dump([m.model_dump() for m in self.metadata], f, indent=2, ensure_ascii=False)
         stemmer = Stemmer.Stemmer("english")
         print("\nTokenizing chunked documents...\n")
         tokens = bm25s.tokenize(
