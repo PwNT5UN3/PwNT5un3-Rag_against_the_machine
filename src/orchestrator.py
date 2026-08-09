@@ -23,6 +23,7 @@ class RagAgainstTheMachine:
         self.metadata = []
         self.retriever = bm25s.BM25()
         self.indexed_corpus = False
+        self.stemmer = Stemmer.Stemmer("english")
         # self.device = "cuda" if torch.cuda.is_available() else "cpu"
         # try:
         #     self.llm = AutoModelForCausalLM.from_pretrained(
@@ -67,16 +68,17 @@ class RagAgainstTheMachine:
             )
         with open("chunks.json", "w", encoding="utf-8") as f:
             json.dump([m.model_dump() for m in self.metadata], f, indent=2, ensure_ascii=False)
-        stemmer = Stemmer.Stemmer("english")
         print("\nTokenizing chunked documents...\n")
-        tokens = bm25s.tokenize(
-            [clean_text_chunks(d) for d in self.docs],
+        tokens = [clean_text_chunks(d) for d in self.docs]
+        corpus_tokens = bm25s.tokenize(
+            tokens,
             stopwords="en",
-            stemmer=stemmer,
+            stemmer=self.stemmer,
             lower=False,
         )
+        print(corpus_tokens)
         print("\nIndexing chunked documents...\n")
-        self.retriever.index(tokens)
+        self.retriever.index(corpus_tokens)
         self.indexed_corpus = True
 
     def search(self, query: str, k: int = 5, id: str = ""):
@@ -91,7 +93,7 @@ class RagAgainstTheMachine:
                 retrieved_sources=[],
             )
         query = streamline_query(query)
-        results, scores = self.retriever.retrieve(bm25s.tokenize(query), k=k)
+        results, scores = self.retriever.retrieve(bm25s.tokenize(query, stemmer=self.stemmer), k=k)
         retrieved = []
         for i in range(results.shape[1]):
             doc, score = results[0, i], scores[0, i]

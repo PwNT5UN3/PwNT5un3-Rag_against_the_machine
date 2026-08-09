@@ -103,9 +103,9 @@ class Chunker:
         if not text or not text.strip():
             return []
         if len(text) <= max_chunk:
-            return [
-                Document(text.strip(), metadata={"start_index": text.find(text.strip(), 0), "src": file_name})
-            ]
+                    return [
+                        Document(text.strip(), metadata={"start_index": text.find(text.strip(), 0), "src": file_name})
+                    ]
         try:
             tree = ast.parse(text)
         except SyntaxError:
@@ -140,10 +140,10 @@ class Chunker:
         docs: list[Document] = []
         first_node_start = offsets[true_top_level[0].lineno - 1]
         if first_node_start > 0:
-            prefix = text[first_node_start].strip()
+            prefix = text[:first_node_start].strip()
             if prefix:
                 docs.extend(
-                    Chunker.chunk_text(file_name, max_chunk, prefix, False)
+                    Chunker.chunk_text(file_name, max_chunk, prefix, True)
                 )
         for node in true_top_level:
             node_start = offsets[node.lineno - 1]

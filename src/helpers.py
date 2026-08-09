@@ -46,7 +46,6 @@ def streamline_query(query: str):
             if word not in _QUESTION_WORDS and len(word) >= 2
         ]
     )
-    print(query)
     return query
 
 
