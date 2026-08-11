@@ -12,17 +12,16 @@ from pydantic_models import (
     MinimalSearchResults,
     UnansweredQuestion,
     StudentSearchResults,
+    RagDataset
 )
+from pathlib import Path
+import pickle
 
 
 class RagAgainstTheMachine:
     """main orchestrator, all commands are defined here"""
 
     def __init__(self, model_name="Qwen/Qwen3-0.6B"):
-        self.docs = []
-        self.metadata = []
-        self.retriever = bm25s.BM25()
-        self.indexed_corpus = False
         self.stemmer = Stemmer.Stemmer("english")
         # self.device = "cuda" if torch.cuda.is_available() else "cpu"
         # try:
@@ -57,31 +56,52 @@ class RagAgainstTheMachine:
         code_corpus = Chunker.chunk_vllm_code(
             maximum_chunk_size=maximum_chunk_size
         )
-        self.docs.extend(d.get("content") for d in doc_corpus)
-        self.docs.extend(d.get("content") for d in code_corpus)
-        self.metadata.extend(d.get("src") for d in doc_corpus)
-        self.metadata.extend(d.get("src") for d in code_corpus)
-        if self.docs == []:
+        docs = []
+        metadata = []
+        docs.extend(d.get("content") for d in doc_corpus)
+        docs.extend(d.get("content") for d in code_corpus)
+        metadata.extend(d.get("src") for d in doc_corpus)
+        metadata.extend(d.get("src") for d in code_corpus)
+        if docs == []:
             raise Exception(
                 "Corpus is empty, please make sure to pass "
                 + "the correct corpus folder"
             )
-        with open("chunks.json", "w", encoding="utf-8") as f:
-            json.dump([m.model_dump() for m in self.metadata], f, indent=2, ensure_ascii=False)
+
+        Path("./data/chunks").mkdir(parents=True, exist_ok=True)
+        with open("./data/chunks/chunks.json", "w", encoding="utf-8") as f:
+            json.dump([m.model_dump() for m in metadata], f, indent=2, ensure_ascii=False)
         print("\nTokenizing chunked documents...\n")
-        tokens = [clean_text_chunks(d) for d in self.docs]
+        tokens = [clean_text_chunks(d) for d in docs]
         corpus_tokens = bm25s.tokenize(
             tokens,
             stopwords="en",
             stemmer=self.stemmer,
             lower=False,
         )
-        print(corpus_tokens)
         print("\nIndexing chunked documents...\n")
-        self.retriever.index(corpus_tokens)
-        self.indexed_corpus = True
+        retriever = bm25s.BM25()
+        retriever.index(corpus_tokens)
+        Path("./data/processed").mkdir(parents=True, exist_ok=True)
+        with open("./data/processed/bm25_index.pkl", "wb") as f:
+            pickle.dump(retriever, f)
+        print("\nIndexed Corpus and saved retriever!\n")
 
-    def search(self, query: str, k: int = 5, id: str = ""):
+    def load_index(self) -> tuple[bm25s.BM25, list[MinimalSource]]:
+        if not Path("./data/processed/bm25_index.pkl").exists() or not Path("./data/chunks/chunks.json").exists():
+            print("Index doesn't exist, please index the corpus first!")
+        try:
+            with open("./data/processed/bm25_index.pkl", "rb") as f:
+                retriever = pickle.load(f)
+            with open("./data/chunks/chunks.json", "r") as f:
+                data = json.load(f)
+            metadata = [MinimalSource(**item) for item in data]
+            return retriever, metadata
+        except Exception as e:
+            print("Error retrieving BM25 index:", e)
+            exit(1)
+
+    def search(self, query: str, metadata: list[MinimalSearchResults], retriever: bm25s.BM25, k: int = 5, id: str = ""):
         if id:
             question = UnansweredQuestion(question_id=id, question=query)
         else:
@@ -93,12 +113,12 @@ class RagAgainstTheMachine:
                 retrieved_sources=[],
             )
         query = streamline_query(query)
-        results, scores = self.retriever.retrieve(bm25s.tokenize(query, stemmer=self.stemmer), k=k)
+        results, scores = retriever.retrieve(bm25s.tokenize(query, stemmer=self.stemmer), k=k)
         retrieved = []
         for i in range(results.shape[1]):
             doc, score = results[0, i], scores[0, i]
             retrieved.append((doc, score))
-        context_docs = [self.metadata[doc] for doc, _ in retrieved]
+        context_docs = [metadata[doc] for doc, _ in retrieved]
         return MinimalSearchResults(
             question_id=question.question_id,
             question=question.question,
@@ -106,23 +126,27 @@ class RagAgainstTheMachine:
         )
 
     def search_set(
-        self, set_file: str, k: int = 5, save: str = "./search_results.json"
-    ):
+        self, set_file: str, metadata: list[MinimalSource], retriever: bm25s.BM25, k: int = 5, save: str | None = None):
+        if not save:
+            save = f"./data/output/{set_file.split('/')[-1] if '/' in set_file else set_file}"
         with open(set_file) as f:
             d = json.load(f)
         results = []
-        question_set = d.get("rag_questions", [])
-        for question in question_set:
+        questions = RagDataset(rag_questions=d.get("rag_questions", []))
+        for question in questions.rag_questions:
             results.append(
                 self.search(
-                    question.get("question", ""),
+                    question.question,
+                    metadata,
+                    retriever,
                     k,
-                    question.get("question_id", ""),
+                    question.question_id,
                 )
             )
         file = StudentSearchResults(search_results=results, k=k).model_dump(
             mode="json"
         )
+        Path("./data/output").mkdir(parents=True, exist_ok=True)
         with open(save, "w") as f:
             json.dump(file, f)
 
@@ -132,7 +156,6 @@ class RagAgainstTheMachine:
             if query.strip() == "":
                 break
             query = streamline_query(query)
-            print(query)
             results, scores = self.retriever.retrieve(
                 bm25s.tokenize(query), k=5
             )
@@ -152,14 +175,16 @@ class RagAgainstTheMachine:
 if __name__ == "__main__":
     rag = RagAgainstTheMachine()
     rag.index_docs()
+    retriever, metadata = rag.load_index()
     rag.search_set(
-        "./datasets_public/public/UnansweredQuestions/dataset_docs_public.json",
-        save="docs.json",
+        "./data/datasets/public/UnansweredQuestions/dataset_docs_public.json",
+        metadata,
+        retriever,
         k=10,
     )
     rag.search_set(
-        "./datasets_public/public/UnansweredQuestions/dataset_code_public.json",
-        save="code.json",
+        "./data/datasets/public/UnansweredQuestions/dataset_code_public.json",
+        metadata,
+        retriever,
         k=10,
     )
-    print(rag.search("How do you configure data parallel deployment in vLLM?"))
