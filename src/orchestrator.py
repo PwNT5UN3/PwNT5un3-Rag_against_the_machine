@@ -12,10 +12,14 @@ from pydantic_models import (
     MinimalSearchResults,
     UnansweredQuestion,
     StudentSearchResults,
-    RagDataset
+    RagDataset,
+    AnsweredQuestion,
+    MinimalAnswer,
+    StudentSearchResultsAndAnswer
 )
 from pathlib import Path
 import pickle
+from tqdm import tqdm
 
 
 class RagAgainstTheMachine:
@@ -37,7 +41,7 @@ class RagAgainstTheMachine:
         #         "Could not fetch model, are you connected to the internet?"
         #     )
 
-    def index_docs(self, maximum_chunk_size: int = 2000):
+    def index_docs(self, maximum_chunk_size: int = 2000) -> None:
         if maximum_chunk_size < 1000:
             raise ValueError(
                 "minimum chunk size is 1000 characters"
@@ -101,7 +105,7 @@ class RagAgainstTheMachine:
             print("Error retrieving BM25 index:", e)
             exit(1)
 
-    def search(self, query: str, metadata: list[MinimalSearchResults], retriever: bm25s.BM25, k: int = 5, id: str = ""):
+    def search(self, query: str, metadata: list[MinimalSearchResults], retriever: bm25s.BM25, k: int = 5, id: str = "") -> MinimalSearchResults:
         if id:
             question = UnansweredQuestion(question_id=id, question=query)
         else:
@@ -126,14 +130,14 @@ class RagAgainstTheMachine:
         )
 
     def search_set(
-        self, set_file: str, metadata: list[MinimalSource], retriever: bm25s.BM25, k: int = 5, save: str | None = None):
+        self, set_file: str, metadata: list[MinimalSource], retriever: bm25s.BM25, k: int = 5, save: str | None = None) -> None:
         if not save:
-            save = f"./data/output/{set_file.split('/')[-1] if '/' in set_file else set_file}"
+            save = f"./data/output/search/{set_file.split('/')[-1] if '/' in set_file else set_file}"
         with open(set_file) as f:
             d = json.load(f)
         results = []
         questions = RagDataset(rag_questions=d.get("rag_questions", []))
-        for question in questions.rag_questions:
+        for question in tqdm(questions.rag_questions, desc=f"Processing search dataset {set_file.split('/')[-1] if '/' in set_file else set_file}..."):
             results.append(
                 self.search(
                     question.question,
@@ -146,7 +150,33 @@ class RagAgainstTheMachine:
         file = StudentSearchResults(search_results=results, k=k).model_dump(
             mode="json"
         )
-        Path("./data/output").mkdir(parents=True, exist_ok=True)
+        Path("./data/output/search").mkdir(parents=True, exist_ok=True)
+        with open(save, "w") as f:
+            json.dump(file, f)
+
+    def answer(self, query, metadata: list[MinimalSource], retriever:bm25s.BM25, k: int = 5,  id: str = "") -> MinimalAnswer:
+        if id:
+            question = UnansweredQuestion(question_id=id, question=query)
+        else:
+            question = UnansweredQuestion(question=query)
+        if query.strip() == "":
+            return MinimalAnswer(question_id=question.id, question=question.question, sources=[], answer="Please provide a valid query.")
+        sources = self.search(query, metadata, retriever, k, id).retrieved_sources
+        #insert llm prompting here:
+        response = "llm integration not yet implemented."
+        return MinimalAnswer(question_id=question.question_id, question=question.question, retrieved_sources=sources, answer=response)
+
+    def answer_set(self, set_file: str, metadatasave: list[MinimalSource], retriever: bm25s.BM25, k: int = 5, save: str | None = None):
+        if not save:
+            save = f"./data/output/answer/{set_file.split('/')[-1] if '/' in set_file else set_file}"
+        with open(set_file) as f:
+            d = json.load(f)
+        results = []
+        questions = RagDataset(rag_questions=d.get("rag_questions", []))
+        for question in tqdm(questions.rag_questions, desc=f"Processing answer dataset {set_file.split('/')[-1] if '/' in set_file else set_file}..."):
+            results.append(self.answer(question.question, metadata, retriever, k, question.question_id))
+        file = StudentSearchResultsAndAnswer(search_results=results, k=k).model_dump(mode='json')
+        Path("./data/output/answer").mkdir(parents=True, exist_ok=True)
         with open(save, "w") as f:
             json.dump(file, f)
 
@@ -187,4 +217,6 @@ if __name__ == "__main__":
         metadata,
         retriever,
         k=10,
+    )
+    print(rag.answer("How to configure the openAI server?", metadata, retriever)
     )
