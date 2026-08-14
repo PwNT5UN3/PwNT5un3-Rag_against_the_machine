@@ -105,7 +105,7 @@ class RagAgainstTheMachine:
             print("Error retrieving BM25 index:", e)
             exit(1)
 
-    def search(self, query: str, metadata: list[MinimalSearchResults], retriever: bm25s.BM25, k: int = 5, id: str = "") -> MinimalSearchResults:
+    def search_index(self, query: str, metadata: list[MinimalSearchResults], retriever: bm25s.BM25, k: int = 5, id: str = "") -> MinimalSearchResults:
         if id:
             question = UnansweredQuestion(question_id=id, question=query)
         else:
@@ -137,9 +137,9 @@ class RagAgainstTheMachine:
             d = json.load(f)
         results = []
         questions = RagDataset(rag_questions=d.get("rag_questions", []))
-        for question in tqdm(questions.rag_questions, desc=f"Processing search dataset {set_file.split('/')[-1] if '/' in set_file else set_file}..."):
+        for question in tqdm(questions.rag_questions, desc=f"Processing dataset {set_file.split('/')[-1] if '/' in set_file else set_file} in search mode..."):
             results.append(
-                self.search(
+                self.search_index(
                     question.question,
                     metadata,
                     retriever,
@@ -154,14 +154,14 @@ class RagAgainstTheMachine:
         with open(save, "w") as f:
             json.dump(file, f)
 
-    def answer(self, query, metadata: list[MinimalSource], retriever:bm25s.BM25, k: int = 5,  id: str = "") -> MinimalAnswer:
+    def answer_question(self, query, metadata: list[MinimalSource], retriever:bm25s.BM25, k: int = 5,  id: str = "") -> MinimalAnswer:
         if id:
             question = UnansweredQuestion(question_id=id, question=query)
         else:
             question = UnansweredQuestion(question=query)
         if query.strip() == "":
             return MinimalAnswer(question_id=question.id, question=question.question, sources=[], answer="Please provide a valid query.")
-        sources = self.search(query, metadata, retriever, k, id).retrieved_sources
+        sources = self.search_index(query, metadata, retriever, k, id).retrieved_sources
         #insert llm prompting here:
         response = "llm integration not yet implemented."
         return MinimalAnswer(question_id=question.question_id, question=question.question, retrieved_sources=sources, answer=response)
@@ -173,8 +173,8 @@ class RagAgainstTheMachine:
             d = json.load(f)
         results = []
         questions = RagDataset(rag_questions=d.get("rag_questions", []))
-        for question in tqdm(questions.rag_questions, desc=f"Processing answer dataset {set_file.split('/')[-1] if '/' in set_file else set_file}..."):
-            results.append(self.answer(question.question, metadata, retriever, k, question.question_id))
+        for question in tqdm(questions.rag_questions, desc=f"Processing dataset {set_file.split('/')[-1] if '/' in set_file else set_file} in answer mode..."):
+            results.append(self.answer_question(question.question, metadata, retriever, k, question.question_id))
         file = StudentSearchResultsAndAnswer(search_results=results, k=k).model_dump(mode='json')
         Path("./data/output/answer").mkdir(parents=True, exist_ok=True)
         with open(save, "w") as f:
@@ -218,5 +218,15 @@ if __name__ == "__main__":
         retriever,
         k=10,
     )
-    print(rag.answer("How to configure the openAI server?", metadata, retriever)
+    rag.answer_set(
+        "./data/datasets/public/UnansweredQuestions/dataset_docs_public.json",
+        metadata,
+        retriever,
+        k=10,
+    )
+    rag.answer_set(
+        "./data/datasets/public/UnansweredQuestions/dataset_code_public.json",
+        metadata,
+        retriever,
+        k=10,
     )
