@@ -15,7 +15,7 @@ from pydantic_models import (
     RagDataset,
     AnsweredQuestion,
     MinimalAnswer,
-    StudentSearchResultsAndAnswer
+    StudentSearchResultsAndAnswer,
 )
 from pathlib import Path
 import pickle
@@ -60,8 +60,8 @@ class RagAgainstTheMachine:
         code_corpus = Chunker.chunk_vllm_code(
             maximum_chunk_size=maximum_chunk_size
         )
-        docs = []
-        metadata = []
+        docs: list[str] = []
+        metadata: list[MinimalSource] = []
         docs.extend(d.get("content") for d in doc_corpus)
         docs.extend(d.get("content") for d in code_corpus)
         metadata.extend(d.get("src") for d in doc_corpus)
@@ -74,7 +74,12 @@ class RagAgainstTheMachine:
 
         Path("./data/chunks").mkdir(parents=True, exist_ok=True)
         with open("./data/chunks/chunks.json", "w", encoding="utf-8") as f:
-            json.dump([m.model_dump() for m in metadata], f, indent=2, ensure_ascii=False)
+            json.dump(
+                [m.model_dump() for m in metadata],
+                f,
+                indent=2,
+                ensure_ascii=False,
+            )
         print("\nTokenizing chunked documents...\n")
         tokens = [clean_text_chunks(d) for d in docs]
         corpus_tokens = bm25s.tokenize(
@@ -92,7 +97,10 @@ class RagAgainstTheMachine:
         print("\nIndexed Corpus and saved retriever!\n")
 
     def load_index(self) -> tuple[bm25s.BM25, list[MinimalSource]]:
-        if not Path("./data/processed/bm25_index.pkl").exists() or not Path("./data/chunks/chunks.json").exists():
+        if (
+            not Path("./data/processed/bm25_index.pkl").exists()
+            or not Path("./data/chunks/chunks.json").exists()
+        ):
             print("Index doesn't exist, please index the corpus first!")
         try:
             with open("./data/processed/bm25_index.pkl", "rb") as f:
@@ -105,7 +113,14 @@ class RagAgainstTheMachine:
             print("Error retrieving BM25 index:", e)
             exit(1)
 
-    def search_index(self, query: str, metadata: list[MinimalSearchResults], retriever: bm25s.BM25, k: int = 5, id: str = "") -> MinimalSearchResults:
+    def search_index(
+        self,
+        query: str,
+        metadata: list[MinimalSource],
+        retriever: bm25s.BM25,
+        k: int = 5,
+        id: str = "",
+    ) -> MinimalSearchResults:
         if id:
             question = UnansweredQuestion(question_id=id, question=query)
         else:
@@ -117,7 +132,9 @@ class RagAgainstTheMachine:
                 retrieved_sources=[],
             )
         query = streamline_query(query)
-        results, scores = retriever.retrieve(bm25s.tokenize(query, stemmer=self.stemmer), k=k)
+        results, scores = retriever.retrieve(
+            bm25s.tokenize(query, stemmer=self.stemmer), k=k
+        )
         retrieved = []
         for i in range(results.shape[1]):
             doc, score = results[0, i], scores[0, i]
@@ -130,14 +147,24 @@ class RagAgainstTheMachine:
         )
 
     def search_set(
-        self, set_file: str, metadata: list[MinimalSource], retriever: bm25s.BM25, k: int = 5, save: str | None = None) -> None:
+        self,
+        set_file: str,
+        metadata: list[MinimalSource],
+        retriever: bm25s.BM25,
+        k: int = 5,
+        save: str | None = None,
+    ) -> None:
+        file_name = set_file.split("/")[-1] if "/" in set_file else set_file
         if not save:
-            save = f"./data/output/search/{set_file.split('/')[-1] if '/' in set_file else set_file}"
+            save = f"./data/output/search/{file_name}"
         with open(set_file) as f:
             d = json.load(f)
         results = []
         questions = RagDataset(rag_questions=d.get("rag_questions", []))
-        for question in tqdm(questions.rag_questions, desc=f"Processing dataset {set_file.split('/')[-1] if '/' in set_file else set_file} in search mode..."):
+        for question in tqdm(
+            questions.rag_questions,
+            desc=f"Processing dataset {file_name} in search mode...",
+        ):
             results.append(
                 self.search_index(
                     question.question,
@@ -154,33 +181,78 @@ class RagAgainstTheMachine:
         with open(save, "w") as f:
             json.dump(file, f)
 
-    def answer_question(self, query, metadata: list[MinimalSource], retriever:bm25s.BM25, k: int = 5,  id: str = "") -> MinimalAnswer:
+    def answer_question(
+        self,
+        query,
+        metadata: list[MinimalSource],
+        retriever: bm25s.BM25,
+        k: int = 5,
+        id: str = "",
+    ) -> MinimalAnswer:
         if id:
             question = UnansweredQuestion(question_id=id, question=query)
         else:
             question = UnansweredQuestion(question=query)
         if query.strip() == "":
-            return MinimalAnswer(question_id=question.id, question=question.question, sources=[], answer="Please provide a valid query.")
-        sources = self.search_index(query, metadata, retriever, k, id).retrieved_sources
-        #insert llm prompting here:
+            return MinimalAnswer(
+                question_id=question.id,
+                question=question.question,
+                sources=[],
+                answer="Please provide a valid query.",
+            )
+        sources = self.search_index(
+            query, metadata, retriever, k, id
+        ).retrieved_sources
+        # insert llm prompting here:
         response = "llm integration not yet implemented."
-        return MinimalAnswer(question_id=question.question_id, question=question.question, retrieved_sources=sources, answer=response)
+        return MinimalAnswer(
+            question_id=question.question_id,
+            question=question.question,
+            retrieved_sources=sources,
+            answer=response,
+        )
 
-    def answer_set(self, set_file: str, metadata: list[MinimalSource], retriever: bm25s.BM25, k: int = 5, save: str | None = None):
-        if not save:
-            save = f"./data/output/answer/{set_file.split('/')[-1] if '/' in set_file else set_file}"
+    def answer_set(
+        self,
+        set_file: str,
+        metadata: list[MinimalSource],
+        retriever: bm25s.BM25,
+        k: int = 5,
+        save: str | None = None,
+    ):
+        file_name = set_file.split("/")[-1] if "/" in set_file else set_file
+        save = f"./data/output/answer/{file_name}"
         with open(set_file) as f:
             d = json.load(f)
         results = []
         questions = RagDataset(rag_questions=d.get("rag_questions", []))
-        for question in tqdm(questions.rag_questions, desc=f"Processing dataset {set_file.split('/')[-1] if '/' in set_file else set_file} in answer mode..."):
-            results.append(self.answer_question(question.question, metadata, retriever, k, question.question_id))
-        file = StudentSearchResultsAndAnswer(search_results=results, k=k).model_dump(mode='json')
+        for question in tqdm(
+            questions.rag_questions,
+            desc=f"Processing dataset {file_name} in answer mode...",
+        ):
+            results.append(
+                self.answer_question(
+                    question.question,
+                    metadata,
+                    retriever,
+                    k,
+                    question.question_id,
+                )
+            )
+        file = StudentSearchResultsAndAnswer(
+            search_results=results, k=k
+        ).model_dump(mode="json")
         Path("./data/output/answer").mkdir(parents=True, exist_ok=True)
         with open(save, "w") as f:
             json.dump(file, f)
 
-    def evaluate_recall(self, student_result: list[MinimalSearchResults], ground_truth: list[MinimalSearchResults], k: int = 10, iou_threshhold: float = 0.05):
+    def evaluate_recall(
+        self,
+        student_result: list[MinimalSearchResults],
+        ground_truth: list[MinimalSearchResults],
+        k: int = 10,
+        iou_threshhold: float = 0.05,
+    ):
         pass
 
 
