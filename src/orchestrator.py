@@ -166,7 +166,7 @@ class RagAgainstTheMachine:
         response = "llm integration not yet implemented."
         return MinimalAnswer(question_id=question.question_id, question=question.question, retrieved_sources=sources, answer=response)
 
-    def answer_set(self, set_file: str, metadatasave: list[MinimalSource], retriever: bm25s.BM25, k: int = 5, save: str | None = None):
+    def answer_set(self, set_file: str, metadata: list[MinimalSource], retriever: bm25s.BM25, k: int = 5, save: str | None = None):
         if not save:
             save = f"./data/output/answer/{set_file.split('/')[-1] if '/' in set_file else set_file}"
         with open(set_file) as f:
@@ -180,26 +180,8 @@ class RagAgainstTheMachine:
         with open(save, "w") as f:
             json.dump(file, f)
 
-    def answer_question_test(self):
-        while True:
-            query = input("Query: ")
-            if query.strip() == "":
-                break
-            query = streamline_query(query)
-            results, scores = self.retriever.retrieve(
-                bm25s.tokenize(query), k=5
-            )
-            retrieved = []
-            for i in range(results.shape[1]):
-                doc, score = results[0, i], scores[0, i]
-                print(f"Rank {i+1} (score: {score:.2f}): {doc}")
-                retrieved.append((doc, score))
-            context_docs = [
-                ([self.docs[doc], self.metadata[doc]]) for doc, _ in retrieved
-            ]
-            print("Retrieved:")
-            for c, m in context_docs:
-                print("\n", m, "\n---------------------------------\n")
+    def evaluate_recall(self, student_result: list[MinimalSearchResults], ground_truth: list[MinimalSearchResults], k: int = 10, iou_threshhold: float = 0.05):
+        pass
 
 
 if __name__ == "__main__":
