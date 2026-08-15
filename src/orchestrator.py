@@ -249,11 +249,42 @@ class RagAgainstTheMachine:
     def evaluate_recall(
         self,
         student_result: list[MinimalSearchResults],
-        ground_truth: list[MinimalSearchResults],
+        ground_truth: list[dict[str, object]],
         k: int = 10,
         iou_threshhold: float = 0.05,
     ):
-        pass
+        if not student_result or not ground_truth:
+            return  0.0
+        gt_by_question_id: dict[str, list[dict[str, object]]] = {}
+        for entry in ground_truth:
+            qid = entry.get("question_id", "")
+            gt_by_question_id[qid] = entry.get("sources", [])
+        scores: list[float] = []
+        for result in student_result:
+            qid = result.question_id
+            if qid not in gt_by_question_id:
+                continue
+            sources = gt_by_question_id[qid]
+            if not sources:
+                continue
+            retrieved = result.retrieved_sources[:k]
+            found = 0
+            for source in sources:
+                source_path = str(source.get("file_path", "fake.file"))
+                source_start = int(source.get("first_character_index", 0))
+                source_end = int(source.get("last_character_index", 0))
+                for chunk in retrieved:
+                    if chunk.file_path != source_path:
+                        continue
+                    #insert iou threshhold check here
+                    if True:
+                        found += 1
+                        break
+            scores.append(found / len(sources))
+        if not scores:
+            return 0.0
+        return sum(scores) / len(scores)
+
 
 
 if __name__ == "__main__":
@@ -261,26 +292,33 @@ if __name__ == "__main__":
     rag.index_docs()
     retriever, metadata = rag.load_index()
     rag.search_set(
-        "./data/datasets/public/UnansweredQuestions/dataset_docs_public.json",
+        "./data/datasets/UnansweredQuestions/dataset_docs_public.json",
         metadata,
         retriever,
         k=10,
     )
     rag.search_set(
-        "./data/datasets/public/UnansweredQuestions/dataset_code_public.json",
+        "./data/datasets/UnansweredQuestions/dataset_code_public.json",
         metadata,
         retriever,
         k=10,
     )
     rag.answer_set(
-        "./data/datasets/public/UnansweredQuestions/dataset_docs_public.json",
+        "./data/datasets/UnansweredQuestions/dataset_docs_public.json",
         metadata,
         retriever,
         k=10,
     )
     rag.answer_set(
-        "./data/datasets/public/UnansweredQuestions/dataset_code_public.json",
+        "./data/datasets/UnansweredQuestions/dataset_code_public.json",
         metadata,
         retriever,
         k=10,
     )
+    with open("./data/output/search/dataset_docs_public.json") as f:
+        student_results_json = json.load(f)
+    with open("./data/datasets/AnsweredQuestions/dataset_docs_public.json") as f:
+        ground_truth_json = json.load(f)
+    student_results = StudentSearchResults(**student_results_json).search_results
+    ground_truth = ground_truth_json.get("rag_questions", [])
+    print(rag.evaluate_recall(student_results, ground_truth))
