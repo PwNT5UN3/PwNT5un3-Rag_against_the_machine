@@ -25,7 +25,7 @@ from tqdm import tqdm
 class RagAgainstTheMachine:
     """main orchestrator, all commands are defined here"""
 
-    def __init__(self, model_name="Qwen/Qwen3-0.6B"):
+    def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
         self.stemmer = Stemmer.Stemmer("english")
         # self.device = "cuda" if torch.cuda.is_available() else "cpu"
         # try:
@@ -62,10 +62,37 @@ class RagAgainstTheMachine:
         )
         docs: list[str] = []
         metadata: list[MinimalSource] = []
-        docs.extend(d.get("content") for d in doc_corpus)
-        docs.extend(d.get("content") for d in code_corpus)
-        metadata.extend(d.get("src") for d in doc_corpus)
-        metadata.extend(d.get("src") for d in code_corpus)
+        docs.extend(d.get("content", "") for d in doc_corpus)
+        docs.extend(d.get("content", "") for d in code_corpus)
+        metadata.extend(
+            d.get(
+                "src",
+                MinimalSource(
+                    file_path="",
+                    first_character_index=-1,
+                    last_character_index=-1,
+                ),
+            )
+            for d in doc_corpus
+        )
+        metadata.extend(
+            d.get(
+                "src",
+                MinimalSource(
+                    file_path="",
+                    first_character_index=-1,
+                    last_character_index=-1,
+                ),
+            )
+            for d in code_corpus
+        )
+        if (
+            MinimalSource(
+                file_path="", first_character_index=-1, last_character_index=-1
+            )
+            in metadata
+        ):
+            raise Exception("Data encapsulation violation!")
         if docs == []:
             raise Exception(
                 "Corpus is empty, please make sure to pass "
@@ -183,7 +210,7 @@ class RagAgainstTheMachine:
 
     def answer_question(
         self,
-        query,
+        query: str,
         metadata: list[MinimalSource],
         retriever: bm25s.BM25,
         k: int = 5,
@@ -195,9 +222,9 @@ class RagAgainstTheMachine:
             question = UnansweredQuestion(question=query)
         if query.strip() == "":
             return MinimalAnswer(
-                question_id=question.id,
+                question_id=question.question_id,
                 question=question.question,
-                sources=[],
+                retrieved_sources=[],
                 answer="Please provide a valid query.",
             )
         sources = self.search_index(
@@ -219,7 +246,7 @@ class RagAgainstTheMachine:
         retriever: bm25s.BM25,
         k: int = 5,
         save: str | None = None,
-    ):
+    ) -> None:
         file_name = set_file.split("/")[-1] if "/" in set_file else set_file
         save = f"./data/output/answer/{file_name}"
         with open(set_file) as f:
@@ -249,16 +276,17 @@ class RagAgainstTheMachine:
     def evaluate_recall(
         self,
         student_result: list[MinimalSearchResults],
-        ground_truth: list[dict[str, object]],
+        ground_truth: list[AnsweredQuestion],
         k: int = 10,
         iou_threshhold: float = 0.05,
-    ):
+    ) -> float:
         if not student_result or not ground_truth:
-            return  0.0
-        gt_by_question_id: dict[str, list[dict[str, object]]] = {}
+            return 0.0
+        gt_by_question_id: dict[str, list[MinimalSource]] = {}
         for entry in ground_truth:
-            qid = entry.get("question_id", "")
-            gt_by_question_id[qid] = entry.get("sources", [])
+            entry_pyd = AnsweredQuestion(**dict(entry))
+            qid = entry_pyd.question_id
+            gt_by_question_id[qid] = entry_pyd.sources
         scores: list[float] = []
         for result in student_result:
             qid = result.question_id
@@ -270,15 +298,21 @@ class RagAgainstTheMachine:
             retrieved = result.retrieved_sources[:k]
             found = 0
             for source in sources:
-                source_path = str(source.get("file_path", "fake.file"))
-                source_start = int(source.get("first_character_index", 0))
-                source_end = int(source.get("last_character_index", 0))
+                source_path = source.file_path
+                source_start = source.first_character_index
+                source_end = source.last_character_index
                 for chunk in retrieved:
                     if chunk.file_path != source_path:
                         continue
-                    #insert iou threshhold check here
-                    intersection = max(0, min(source_end, chunk.last_character_index) - max(source_start, chunk.first_character_index))
-                    union = max(source_end, chunk.last_character_index) - min(source_start, chunk.first_character_index)
+                    # insert iou threshhold check here
+                    intersection = max(
+                        0,
+                        min(source_end, chunk.last_character_index)
+                        - max(source_start, chunk.first_character_index),
+                    )
+                    union = max(source_end, chunk.last_character_index) - min(
+                        source_start, chunk.first_character_index
+                    )
                     if union <= 0:
                         continue
                     if (intersection / union) >= iou_threshhold:
@@ -288,7 +322,6 @@ class RagAgainstTheMachine:
         if not scores:
             return 0.0
         return sum(scores) / len(scores)
-
 
 
 if __name__ == "__main__":
@@ -321,8 +354,12 @@ if __name__ == "__main__":
     )
     with open("./data/output/search/dataset_docs_public.json") as f:
         student_results_json = json.load(f)
-    with open("./data/datasets/AnsweredQuestions/dataset_docs_public.json") as f:
+    with open(
+        "./data/datasets/AnsweredQuestions/dataset_docs_public.json"
+    ) as f:
         ground_truth_json = json.load(f)
-    student_results = StudentSearchResults(**student_results_json).search_results
+    student_results = StudentSearchResults(
+        **student_results_json
+    ).search_results
     ground_truth = ground_truth_json.get("rag_questions", [])
     print(rag.evaluate_recall(student_results, ground_truth))

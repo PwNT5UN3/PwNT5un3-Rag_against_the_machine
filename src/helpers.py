@@ -33,7 +33,7 @@ _QUESTION_WORDS = [
 ]
 
 
-def streamline_query(query: str):
+def streamline_query(query: str) -> str:
     query = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", query).lower()
     query = re.sub(r"[^\w\s]|(?<!\w)_|_(?!\w)", " ", query)
     words = query.lower().split(" ")
@@ -49,7 +49,7 @@ def streamline_query(query: str):
     return query
 
 
-def clean_text_chunks(chunk: str):
+def clean_text_chunks(chunk: str) -> str:
     chunk = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", chunk).lower()
     chunk = re.sub(r"[^\w\s]|(?<!\w)_|_(?!\w)", " ", chunk)
     tokens = chunk.split()

@@ -4,28 +4,37 @@ from langchain_core.documents import Document
 from tqdm import trange
 from pydantic_models import MinimalSource
 import ast
+from typing import Any
 
 
 class Chunker:
 
     @staticmethod
-    def calc_and_add_end_index(doc: Document) -> dict:
+    def calc_and_add_end_index(
+        doc: Document,
+    ) -> dict[str, Any]:
         if not doc.metadata.get("end_index"):
-            doc.metadata["end_index"] = (
-                doc.metadata.get("start_index", 0) + len(doc.page_content)
-            )
+            doc.metadata["end_index"] = doc.metadata.get(
+                "start_index", 0
+            ) + len(doc.page_content)
         doc.page_content = doc.page_content.strip("\n \t")
         return {"content": doc.page_content, "metadata": doc.metadata}
 
     @staticmethod
     def chunk_text(
         file_name: str, max_chunk: int, text: str, is_text: bool
-    ) -> list:
+    ) -> list[Document]:
         if not text or not text.strip():
             return []
         if len(text) <= max_chunk:
             return [
-                Document(text.strip(), metadata={"start_index": text.find(text.strip(), 0), "src": file_name})
+                Document(
+                    text.strip(),
+                    metadata={
+                        "start_index": text.find(text.strip(), 0),
+                        "src": file_name,
+                    },
+                )
             ]
         doc_chunker = RecursiveCharacterTextSplitter(
             chunk_size=max_chunk,
@@ -59,7 +68,7 @@ class Chunker:
         directory: str = "./data/raw/",
         file_type: list[str] | str = ["md", "txt"],
         maximum_chunk_size: int = 2000,
-    ) -> list:
+    ) -> list[dict[str, Any]]:
         if isinstance(file_type, str):
             file_type = [file_type]
 
@@ -69,15 +78,15 @@ class Chunker:
                 filepath = os.path.join(root, file)
                 if filepath.split(".")[-1] in file_type:
                     doc_files.append(filepath)
-        docs: list[dict[str, str | dict]] = []
+        docs: list[dict[str, str | dict[Any, Any]]] = []
         for i in trange(len(doc_files), desc="Chunking doc files..."):
             with open(doc_files[i], "r", encoding="utf-8") as f:
                 text = f.read()
             doc = Chunker.chunk_text(
                 doc_files[i][2:], maximum_chunk_size, text, True
             )
-            doc = list(map(Chunker.calc_and_add_end_index, doc))
-            docs.extend(doc)
+            doc_2 = [Chunker.calc_and_add_end_index(d) for d in doc]
+            docs.extend(doc_2)
         corpus = []
         for j in trange(len(docs), desc="Annotating doc chunks..."):
             doc_meta = docs[j].get("metadata")
@@ -99,13 +108,21 @@ class Chunker:
         return corpus
 
     @staticmethod
-    def chunk_python(file_name: str, max_chunk: int, text: str) -> list:
+    def chunk_python(
+        file_name: str, max_chunk: int, text: str
+    ) -> list[Document]:
         if not text or not text.strip():
             return []
         if len(text) <= max_chunk:
-                    return [
-                        Document(text.strip(), metadata={"start_index": text.find(text.strip(), 0), "src": file_name})
-                    ]
+            return [
+                Document(
+                    text.strip(),
+                    metadata={
+                        "start_index": text.find(text.strip(), 0),
+                        "src": file_name,
+                    },
+                )
+            ]
         try:
             tree = ast.parse(text)
         except SyntaxError:
@@ -188,7 +205,7 @@ class Chunker:
         directory: str = "./data/raw/",
         file_type: list[str] | str = "py",
         maximum_chunk_size: int = 2000,
-    ) -> list:
+    ) -> list[dict[str, Any]]:
         if isinstance(file_type, str):
             file_type = [file_type]
         code_files = []
@@ -197,15 +214,15 @@ class Chunker:
                 filepath = os.path.join(root, file)
                 if filepath.split(".")[-1] in file_type:
                     code_files.append(filepath)
-        docs: list = []
+        docs: list[dict[str, str | dict[Any, Any]]] = []
         for i in trange(len(code_files), desc="chunking code files..."):
             with open(code_files[i], "r", encoding="utf-8") as f:
                 code = f.read()
             doc = Chunker.chunk_python(
                 code_files[i][2:], maximum_chunk_size, code
             )
-            doc = list(map(Chunker.calc_and_add_end_index, doc))
-            docs.extend(doc)
+            doc_2 = [Chunker.calc_and_add_end_index(d) for d in doc]
+            docs.extend(doc_2)
         corpus = []
         for j in trange(len(docs), desc="Annotating code chunks..."):
             doc_meta = docs[j].get("metadata")

@@ -29,7 +29,8 @@ install:
 	uv pip install numpy; \
 # 	uv pip install accelerate; \
 	uv pip install langchain_core; \
-	uv pip install -qU langchain-text-splitters
+	uv pip install -qU langchain-text-splitters \
+	uv run mypy --install-types
 
 
 run:
@@ -54,13 +55,13 @@ clean:
 	find . -name "*.pyo" -delete
 
 lint:
-	uv run flake8 **/*.py
-	uv run mypy . --warn-return-any \
+	uv run flake8 src/*.py
+	uv run mypy src/*py --warn-return-any \
 	--warn-unused-ignores \
 	--ignore-missing-imports \
 	--disallow-untyped-defs \
 	--check-untyped-defs
 
 lint-strict: 
-	uv run flake8 **/*.py
-	uv run mypy . --strict
+	uv run flake8 src/*.py
+	uv run mypy src/*.py --strict
