@@ -277,7 +277,11 @@ class RagAgainstTheMachine:
                     if chunk.file_path != source_path:
                         continue
                     #insert iou threshhold check here
-                    if True:
+                    intersection = max(0, min(source_end, chunk.last_character_index) - max(source_start, chunk.first_character_index))
+                    union = max(source_end, chunk.last_character_index) - min(source_start, chunk.first_character_index)
+                    if union <= 0:
+                        continue
+                    if (intersection / union) >= iou_threshhold:
                         found += 1
                         break
             scores.append(found / len(sources))
