@@ -1,12 +1,12 @@
-from ingest_vllm import Chunker
+from src.ingest_vllm import Chunker
 
 # import torch
 import bm25s  # type: ignore
 
 # from transformers import AutoModelForCausalLM
-from helpers import streamline_query, clean_text_chunks
+from src.helpers import streamline_query, clean_text_chunks
 import json
-from pydantic_models import (
+from src.pydantic_models import (
     MinimalSource,
     MinimalSearchResults,
     UnansweredQuestion,
@@ -48,8 +48,7 @@ class RagAgainstTheMachine:
             )
         elif maximum_chunk_size < 1500:
             print(
-                "Warning: recommended chunk size for"
-                + " is 1500-2000 characters"
+                "Warning: recommended chunk size" + " is 1500-2000 characters"
             )
         elif maximum_chunk_size > 2000:
             raise ValueError("Maximum chunk size is 2000 characters")
@@ -205,6 +204,7 @@ class RagAgainstTheMachine:
         Path("./data/output/search").mkdir(parents=True, exist_ok=True)
         with open(save, "w") as f:
             json.dump(file, f)
+        print(f"Saved search results to {save}")
 
     def answer_question(
         self,
@@ -270,6 +270,7 @@ class RagAgainstTheMachine:
         Path("./data/output/answer").mkdir(parents=True, exist_ok=True)
         with open(save, "w") as f:
             json.dump(file, f)
+        print(f"Saved answers to {save}")
 
     def evaluate_recall(
         self,

@@ -2,7 +2,7 @@ import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from tqdm import trange
-from pydantic_models import MinimalSource
+from src.pydantic_models import MinimalSource
 import ast
 from typing import Any
 
@@ -242,8 +242,3 @@ class Chunker:
                 }
             )
         return corpus
-
-
-if __name__ == "__main__":
-    chunker = Chunker()
-    chunker.chunk_vllm_docs()
