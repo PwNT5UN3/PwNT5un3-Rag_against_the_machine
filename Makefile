@@ -26,7 +26,6 @@ install:
 	uv pip install tqdm; \
 	uv pip install transformers; \
 # 	uv pip install torch; \
-	uv pip install numpy; \
 # 	uv pip install accelerate; \
 	uv pip install langchain_core; \
 	uv pip install -qU langchain-text-splitters; \
@@ -40,11 +39,11 @@ run:
 	fi
 	@sh -c '\
 		. ./.venv/bin/activate; \
-		uv run python main.py $(ARGS); \
+		uv run python3 -m src $(ARGS); \
 	'
 
 debug:
-	uv run python -m pdb main.py $(ARGS)
+	uv run python -m pdb src/__main__.py $(ARGS)
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
