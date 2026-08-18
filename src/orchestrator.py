@@ -1,8 +1,7 @@
 from ingest_vllm import Chunker
 
 # import torch
-import bm25s
-import Stemmer
+import bm25s  # type: ignore
 
 # from transformers import AutoModelForCausalLM
 from helpers import streamline_query, clean_text_chunks
@@ -26,7 +25,7 @@ class RagAgainstTheMachine:
     """main orchestrator, all commands are defined here"""
 
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
-        self.stemmer = Stemmer.Stemmer("english")
+        pass
         # self.device = "cuda" if torch.cuda.is_available() else "cpu"
         # try:
         #     self.llm = AutoModelForCausalLM.from_pretrained(
@@ -112,7 +111,6 @@ class RagAgainstTheMachine:
         corpus_tokens = bm25s.tokenize(
             tokens,
             stopwords="en",
-            stemmer=self.stemmer,
             lower=False,
         )
         print("\nIndexing chunked documents...\n")
@@ -160,7 +158,7 @@ class RagAgainstTheMachine:
             )
         query = streamline_query(query)
         results, scores = retriever.retrieve(
-            bm25s.tokenize(query, stemmer=self.stemmer), k=k
+            bm25s.tokenize(query, stopwords="en"), k=k
         )
         retrieved = []
         for i in range(results.shape[1]):
