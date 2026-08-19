@@ -1,9 +1,9 @@
 from src.ingest_vllm import Chunker
 
-# import torch
-import bm25s  # type: ignore
+import torch
+import bm25s
 
-# from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from src.helpers import streamline_query, clean_text_chunks
 import json
 from src.pydantic_models import (
@@ -25,20 +25,21 @@ class RagAgainstTheMachine:
     """main orchestrator, all commands are defined here"""
 
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
-        pass
-        # self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        # try:
-        #     self.llm = AutoModelForCausalLM.from_pretrained(
-        #         model_name,
-        #         dtype=(
-        #             torch.float16 if self.device == "cuda" else torch.float32
-        #         ),
-        #         device_map="auto" if self.device == "cuda" else None,
-        #     ).to(self.device)
-        # except RuntimeError:
-        #     raise RuntimeError(
-        #         "Could not fetch model, are you connected to the internet?"
-        #     )
+
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        try:
+            self.llm = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                dtype=(
+                    torch.float16 if self.device == "cuda" else torch.float32
+                ),
+                device_map="auto" if self.device == "cuda" else None,
+            )
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        except RuntimeError:
+            raise RuntimeError(
+                "Could not fetch model, are you connected to the internet?"
+            )
 
     def index_docs(self, maximum_chunk_size: int = 2000) -> None:
         if maximum_chunk_size < 1000:
@@ -228,8 +229,27 @@ class RagAgainstTheMachine:
         sources = self.search_index(
             query, metadata, retriever, k, id
         ).retrieved_sources
-        # insert llm prompting here:
-        response = "llm integration not yet implemented."
+        source_text: list[str] = []
+        for source in sources:
+            with open(source.file_path) as f:
+                source_text.append(f.read()[source.first_character_index:source.last_character_index])
+        context = "\n-------\n".join([f"[Doc {i+1}]: {doc}" for i, doc in enumerate(source_text)])
+        prompt = f"""You are a reliable and helpful assistant. Provide concise answers truthfully and based on the given context.
+Context:
+{context}
+
+Question: {query}
+
+Answer: """
+        inputs = self.tokenizer.encode(prompt)
+        with torch.no_grad():
+                    outputs = self.llm.generate(
+                        torch.tensor([inputs], device=self.device, dtype=torch.long),
+                        max_length=len(inputs) + 512,
+                        do_sample=False,
+                        pad_token_id=self.tokenizer.eos_token_id
+                    )
+        response = self.tokenizer.decode(outputs)[0].split("Answer:")[1].strip().split("\n")[0].strip()
         return MinimalAnswer(
             question_id=question.question_id,
             question=question.question,
@@ -303,7 +323,6 @@ class RagAgainstTheMachine:
                 for chunk in retrieved:
                     if chunk.file_path != source_path:
                         continue
-                    # insert iou threshhold check here
                     intersection = max(
                         0,
                         min(source_end, chunk.last_character_index)

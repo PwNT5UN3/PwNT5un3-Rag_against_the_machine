@@ -11,9 +11,14 @@ dependencies = [
     "bm25s",
     "tqdm",
     "transformers",
-#    "torch",
-#    "accelerate",
+    "torch",
+    "accelerate",
     "langchain_core",
     "langchain-text-splitters",
     "types-tqdm",
 ]
+
+
+[[tool.mypy.overrides]]
+module = ["bm25s", "fire"]
+ignore_missing_imports = true

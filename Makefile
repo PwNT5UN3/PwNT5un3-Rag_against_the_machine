@@ -25,8 +25,8 @@ install:
 	uv pip install bm25s; \
 	uv pip install tqdm; \
 	uv pip install transformers; \
-# 	uv pip install torch; \
-# 	uv pip install accelerate; \
+	uv pip install torch; \
+	uv pip install accelerate; \
 	uv pip install langchain_core; \
 	uv pip install -qU langchain-text-splitters; \
 	uv pip install types-tqdm

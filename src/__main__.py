@@ -1,4 +1,4 @@
-import fire  # type: ignore
+import fire
 
 import json
 from src.orchestrator import RagAgainstTheMachine
@@ -9,10 +9,10 @@ class RagCLI:
     def __init__(self) -> None:
         self.rag = RagAgainstTheMachine()
 
-    def index(self, max_chunk_size=2000) -> None:
+    def index(self, max_chunk_size: int = 2000) -> None:
         self.rag.index_docs(maximum_chunk_size=max_chunk_size)
 
-    def search(self, query: str, k: int = 5):
+    def search(self, query: str, k: int = 5) -> None:
         retriever, metadata = self.rag.load_index()
         result = self.rag.search_index(query, metadata, retriever, k)
         for i, s in enumerate(result.retrieved_sources):
@@ -23,25 +23,20 @@ class RagCLI:
 
     def search_dataset(
         self, dataset_path: str, k: int = 5, save_directory: str | None = None
-    ):
+    ) -> None:
         retriever, metadata = self.rag.load_index()
         self.rag.search_set(
             dataset_path, metadata, retriever, k, save_directory
         )
 
-    def answer(self, query: str, k: int = 5):
+    def answer(self, query: str, k: int = 5) -> None:
         retriever, metadata = self.rag.load_index()
         result = self.rag.answer_question(query, metadata, retriever, k)
-        for i, s in enumerate(result.retrieved_sources):
-            print(
-                f"[{i + 1}] {s.file_path}",
-                f"({s.first_character_index}:{s.last_character_index})",
-            )
         print(result.answer)
 
     def answer_dataset(
         self, dataset_path: str, k: int = 5, save_directory: str | None = None
-    ):
+    ) -> None:
         retriever, metadata = self.rag.load_index()
         self.rag.answer_set(
             dataset_path, metadata, retriever, k, save_directory
@@ -49,7 +44,7 @@ class RagCLI:
 
     def evaluate(
         self, student_search_results_path: str, dataset_path: str, k: int = 5
-    ):
+    ) -> None:
         with open(student_search_results_path, "r", encoding="utf-8") as f:
             student_data = json.load(f)
         with open(dataset_path, "r", encoding="utf-8") as f:
