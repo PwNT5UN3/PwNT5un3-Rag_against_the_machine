@@ -186,7 +186,12 @@ class RagAgainstTheMachine:
         """calls search for queries from datasets"""
         file_name = set_file.split("/")[-1] if "/" in set_file else set_file
         if not save:
-            save = f"./data/output/search/{file_name}"
+            save = "./data/output/search_results"
+            save_l = f"{save}/{file_name}"
+        elif save[-1] == "/":
+            save_l = f"{save}{file_name}"
+        else:
+            save_l = f"{save}/{file_name}"
         with open(set_file) as f:
             d = json.load(f)
         results = []
@@ -207,10 +212,10 @@ class RagAgainstTheMachine:
         file = StudentSearchResults(search_results=results, k=k).model_dump(
             mode="json"
         )
-        Path("./data/output/search").mkdir(parents=True, exist_ok=True)
-        with open(save, "w") as f:
+        Path(save).mkdir(parents=True, exist_ok=True)
+        with open(save_l, "w") as f:
             json.dump(file, f)
-        print(f"Saved search results to {save}")
+        print(f"Saved search results to {save_l}")
 
     def answer_question(
         self,
@@ -285,7 +290,13 @@ Answer: """
     ) -> None:
         """calls answer for queries from a dataset"""
         file_name = set_file.split("/")[-1] if "/" in set_file else set_file
-        save = f"./data/output/answer/{file_name}"
+        if not save:
+            save = "./data/output/search_results_and_answer"
+            save_l = f"{save}/{file_name}"
+        elif save[-1] == "/":
+            save_l = f"{save}{file_name}"
+        else:
+            save_l = f"{save}/{file_name}"
         with open(set_file) as f:
             d = json.load(f)
         results = []
@@ -306,10 +317,10 @@ Answer: """
         file = StudentSearchResultsAndAnswer(
             search_results=results, k=k
         ).model_dump(mode="json")
-        Path("./data/output/answer").mkdir(parents=True, exist_ok=True)
-        with open(save, "w") as f:
+        Path(save).mkdir(parents=True, exist_ok=True)
+        with open(save_l, "w") as f:
             json.dump(file, f)
-        print(f"Saved answers to {save}")
+        print(f"Saved answers to {save_l}")
 
     def evaluate_recall(
         self,
