@@ -34,6 +34,7 @@ _QUESTION_WORDS = [
 
 
 def streamline_query(query: str) -> str:
+    """strips and streamlines the query for better result quality"""
     query = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", query).lower()
     query = re.sub(r"[^\w\s]|(?<!\w)_|_(?!\w)", " ", query)
     words = query.lower().split(" ")
@@ -50,6 +51,8 @@ def streamline_query(query: str) -> str:
 
 
 def clean_text_chunks(chunk: str) -> str:
+    """
+    strips out unnecessary elements in text chunks for better search quality"""
     chunk = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", chunk).lower()
     chunk = re.sub(r"[^\w\s]|(?<!\w)_|_(?!\w)", " ", chunk)
     tokens = chunk.split()

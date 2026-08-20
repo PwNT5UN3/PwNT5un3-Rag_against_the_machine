@@ -1,8 +1,6 @@
 from src.ingest_vllm import Chunker
-
 import torch
 import bm25s
-
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from src.helpers import streamline_query, clean_text_chunks
 import json
@@ -25,7 +23,7 @@ class RagAgainstTheMachine:
     """main orchestrator, all commands are defined here"""
 
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
-
+        """Constructor"""
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         try:
             self.llm = AutoModelForCausalLM.from_pretrained(
@@ -42,6 +40,7 @@ class RagAgainstTheMachine:
             )
 
     def index_docs(self, maximum_chunk_size: int = 2000) -> None:
+        """has corpus chunked, indexes it and saves everything to files"""
         if maximum_chunk_size < 1000:
             raise ValueError(
                 "minimum chunk size is 1000 characters"
@@ -87,7 +86,8 @@ class RagAgainstTheMachine:
         )
         if (
             MinimalSource(
-                file_path="", first_character_index=-1, last_character_index=-1
+                file_path="", first_character_index=-1,
+                last_character_index=-1
             )
             in metadata
         ):
@@ -122,11 +122,13 @@ class RagAgainstTheMachine:
         print("\nIndexed Corpus and saved retriever!\n")
 
     def load_index(self) -> tuple[bm25s.BM25, list[MinimalSource]]:
+        """loads all necessary information and index"""
         if (
             not Path("./data/processed/bm25_index.pkl").exists()
             or not Path("./data/chunks/chunks.json").exists()
         ):
-            print("Index doesn't exist, please index the corpus first!")
+            raise Exception("Index doesn't exist, " +
+                            "please index the corpus first!")
         try:
             with open("./data/processed/bm25_index.pkl", "rb") as f:
                 retriever = pickle.load(f)
@@ -146,6 +148,7 @@ class RagAgainstTheMachine:
         k: int = 5,
         id: str = "",
     ) -> MinimalSearchResults:
+        """searches the index lexically"""
         if id:
             question = UnansweredQuestion(question_id=id, question=query)
         else:
@@ -179,6 +182,7 @@ class RagAgainstTheMachine:
         k: int = 5,
         save: str | None = None,
     ) -> None:
+        """calls search for queries from datasets"""
         file_name = set_file.split("/")[-1] if "/" in set_file else set_file
         if not save:
             save = f"./data/output/search/{file_name}"
@@ -215,6 +219,7 @@ class RagAgainstTheMachine:
         k: int = 5,
         id: str = "",
     ) -> MinimalAnswer:
+        """retrieves context and answers questions"""
         if id:
             question = UnansweredQuestion(question_id=id, question=query)
         else:
@@ -231,10 +236,14 @@ class RagAgainstTheMachine:
         ).retrieved_sources
         source_text: list[str] = []
         for source in sources:
+            sf = source.first_character_index
+            sl = source.last_character_index
             with open(source.file_path) as f:
-                source_text.append(f.read()[source.first_character_index:source.last_character_index])
-        context = "\n-------\n".join([f"[Doc {i+1}]: {doc}" for i, doc in enumerate(source_text)])
-        prompt = f"""You are a reliable and helpful assistant. Provide concise answers truthfully and based on the given context.
+                source_text.append(f.read()[sf:sl])
+        context = "\n-------\n".join([f"[Doc {i+1}]: {doc}" for i,
+                                      doc in enumerate(source_text)])
+        prompt = f"""You are a reliable and helpful assistant.
+Provide concise, single sentence answers truthfully and based on the given context.
 Context:
 {context}
 
@@ -243,12 +252,12 @@ Question: {query}
 Answer: """
         inputs = self.tokenizer.encode(prompt)
         with torch.no_grad():
-                    outputs = self.llm.generate(
-                        torch.tensor([inputs], device=self.device, dtype=torch.long),
-                        max_length=len(inputs) + 512,
-                        do_sample=False,
-                        pad_token_id=self.tokenizer.eos_token_id
-                    )
+            outputs = self.llm.generate(
+                torch.tensor([inputs], device=self.device, dtype=torch.long),
+                max_length=len(inputs) + 512,
+                do_sample=False,
+                pad_token_id=self.tokenizer.eos_token_id
+            )
         response = self.tokenizer.decode(outputs)[0].split("Answer:")[1].strip().split("\n")[0].strip()
         return MinimalAnswer(
             question_id=question.question_id,
@@ -265,6 +274,7 @@ Answer: """
         k: int = 5,
         save: str | None = None,
     ) -> None:
+        """calls answer for queries from a dataset"""
         file_name = set_file.split("/")[-1] if "/" in set_file else set_file
         save = f"./data/output/answer/{file_name}"
         with open(set_file) as f:
@@ -299,6 +309,8 @@ Answer: """
         k: int = 10,
         iou_threshhold: float = 0.05,
     ) -> float:
+        """
+        compares retrieved sources from a dataset to a ground-truth dataset"""
         if not student_result or not ground_truth:
             return 0.0
         gt_by_question_id: dict[str, list[MinimalSource]] = {}
@@ -340,44 +352,3 @@ Answer: """
         if not scores:
             return 0.0
         return sum(scores) / len(scores)
-
-
-if __name__ == "__main__":
-    rag = RagAgainstTheMachine()
-    rag.index_docs()
-    retriever, metadata = rag.load_index()
-    rag.search_set(
-        "./data/datasets/UnansweredQuestions/dataset_docs_public.json",
-        metadata,
-        retriever,
-        k=10,
-    )
-    rag.search_set(
-        "./data/datasets/UnansweredQuestions/dataset_code_public.json",
-        metadata,
-        retriever,
-        k=10,
-    )
-    rag.answer_set(
-        "./data/datasets/UnansweredQuestions/dataset_docs_public.json",
-        metadata,
-        retriever,
-        k=10,
-    )
-    rag.answer_set(
-        "./data/datasets/UnansweredQuestions/dataset_code_public.json",
-        metadata,
-        retriever,
-        k=10,
-    )
-    with open("./data/output/search/dataset_docs_public.json") as f:
-        student_results_json = json.load(f)
-    with open(
-        "./data/datasets/AnsweredQuestions/dataset_docs_public.json"
-    ) as f:
-        ground_truth_json = json.load(f)
-    student_results = StudentSearchResults(
-        **student_results_json
-    ).search_results
-    ground_truth = ground_truth_json.get("rag_questions", [])
-    print(rag.evaluate_recall(student_results, ground_truth))

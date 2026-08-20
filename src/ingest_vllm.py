@@ -8,11 +8,12 @@ from typing import Any
 
 
 class Chunker:
-
+    """A class to house corpus chunking functionality"""
     @staticmethod
     def calc_and_add_end_index(
         doc: Document,
     ) -> dict[str, Any]:
+        """calculates chunk length and unpacks Document objects"""
         if not doc.metadata.get("end_index"):
             doc.metadata["end_index"] = doc.metadata.get(
                 "start_index", 0
@@ -22,8 +23,9 @@ class Chunker:
 
     @staticmethod
     def chunk_text(
-        file_name: str, max_chunk: int, text: str, is_text: bool
+        file_name: str, max_chunk: int, text: str
     ) -> list[Document]:
+        """chunks given text"""
         if not text or not text.strip():
             return []
         if len(text) <= max_chunk:
@@ -69,9 +71,11 @@ class Chunker:
         file_type: list[str] | str = ["md", "txt"],
         maximum_chunk_size: int = 2000,
     ) -> list[dict[str, Any]]:
+        """
+        Finds document files,
+        has them chunked and outputs complementing MinimalSource objects"""
         if isinstance(file_type, str):
             file_type = [file_type]
-
         doc_files = []
         for root, _, files in os.walk(directory):
             for file in files:
@@ -111,6 +115,7 @@ class Chunker:
     def chunk_python(
         file_name: str, max_chunk: int, text: str
     ) -> list[Document]:
+        """Chunks python code based on its Abstract Syntax Tree"""
         if not text or not text.strip():
             return []
         if len(text) <= max_chunk:
@@ -206,6 +211,8 @@ class Chunker:
         file_type: list[str] | str = "py",
         maximum_chunk_size: int = 2000,
     ) -> list[dict[str, Any]]:
+        """Finds python files,
+        has them chunked and outputs complementing MinimalSource objects"""
         if isinstance(file_type, str):
             file_type = [file_type]
         code_files = []
