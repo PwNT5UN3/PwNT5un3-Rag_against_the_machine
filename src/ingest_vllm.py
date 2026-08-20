@@ -9,6 +9,7 @@ from typing import Any
 
 class Chunker:
     """A class to house corpus chunking functionality"""
+
     @staticmethod
     def calc_and_add_end_index(
         doc: Document,
@@ -87,7 +88,7 @@ class Chunker:
             with open(doc_files[i], "r", encoding="utf-8") as f:
                 text = f.read()
             doc = Chunker.chunk_text(
-                doc_files[i][2:], maximum_chunk_size, text, True
+                doc_files[i][2:], maximum_chunk_size, text
             )
             doc_2 = [Chunker.calc_and_add_end_index(d) for d in doc]
             docs.extend(doc_2)
@@ -131,7 +132,7 @@ class Chunker:
         try:
             tree = ast.parse(text)
         except SyntaxError:
-            return Chunker.chunk_text(file_name, max_chunk, text, False)
+            return Chunker.chunk_text(file_name, max_chunk, text)
         lines = text.splitlines(True)
         offsets: list[int] = []
         offset = 0
@@ -158,15 +159,13 @@ class Chunker:
         ]
         true_top_level.sort(key=lambda x: x.lineno)
         if not true_top_level:
-            return Chunker.chunk_text(file_name, max_chunk, text, False)
+            return Chunker.chunk_text(file_name, max_chunk, text)
         docs: list[Document] = []
         first_node_start = offsets[true_top_level[0].lineno - 1]
         if first_node_start > 0:
             prefix = text[:first_node_start].strip()
             if prefix:
-                docs.extend(
-                    Chunker.chunk_text(file_name, max_chunk, prefix, True)
-                )
+                docs.extend(Chunker.chunk_text(file_name, max_chunk, prefix))
         for node in true_top_level:
             node_start = offsets[node.lineno - 1]
             end_lineno = getattr(node, "end_lineno", node.lineno)
@@ -188,7 +187,7 @@ class Chunker:
                 )
             else:
                 sub_chunks = Chunker.chunk_text(
-                    file_name, max_chunk, node_text, False
+                    file_name, max_chunk, node_text
                 )
                 for chunk in sub_chunks:
                     docs.append(

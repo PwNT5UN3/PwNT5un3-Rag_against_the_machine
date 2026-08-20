@@ -1,7 +1,8 @@
 from src.ingest_vllm import Chunker
 import torch
+from torch import tensor, Tensor
 import bm25s
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 from src.helpers import streamline_query, clean_text_chunks
 import json
 from src.pydantic_models import (
@@ -26,7 +27,7 @@ class RagAgainstTheMachine:
         """Constructor"""
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         try:
-            self.llm = AutoModelForCausalLM.from_pretrained(
+            self.llm: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
                 model_name,
                 dtype=(
                     torch.float16 if self.device == "cuda" else torch.float32
@@ -86,8 +87,7 @@ class RagAgainstTheMachine:
         )
         if (
             MinimalSource(
-                file_path="", first_character_index=-1,
-                last_character_index=-1
+                file_path="", first_character_index=-1, last_character_index=-1
             )
             in metadata
         ):
@@ -127,8 +127,9 @@ class RagAgainstTheMachine:
             not Path("./data/processed/bm25_index.pkl").exists()
             or not Path("./data/chunks/chunks.json").exists()
         ):
-            raise Exception("Index doesn't exist, " +
-                            "please index the corpus first!")
+            raise Exception(
+                "Index doesn't exist, " + "please index the corpus first!"
+            )
         try:
             with open("./data/processed/bm25_index.pkl", "rb") as f:
                 retriever = pickle.load(f)
@@ -240,25 +241,33 @@ class RagAgainstTheMachine:
             sl = source.last_character_index
             with open(source.file_path) as f:
                 source_text.append(f.read()[sf:sl])
-        context = "\n-------\n".join([f"[Doc {i+1}]: {doc}" for i,
-                                      doc in enumerate(source_text)])
+        context = "\n-------\n".join(
+            [f"[Doc {i+1}]: {doc}" for i, doc in enumerate(source_text)]
+        )
         prompt = f"""You are a reliable and helpful assistant.
-Provide concise, single sentence answers truthfully and based on the given context.
+Provide concise, single sentence answers based on the given context.
 Context:
 {context}
 
 Question: {query}
 
 Answer: """
-        inputs = self.tokenizer.encode(prompt)
+        inputs = self.tokenizer.encode(prompt, add_special_tokens=False)
         with torch.no_grad():
-            outputs = self.llm.generate(
-                torch.tensor([inputs], device=self.device, dtype=torch.long),
-                max_length=len(inputs) + 512,
+            outputs: Tensor = self.llm.generate(  # type: ignore
+                tensor([inputs], device=self.device, dtype=torch.long),
+                max_length=int(len(inputs) + 256),
                 do_sample=False,
-                pad_token_id=self.tokenizer.eos_token_id
+                pad_token_id=self.tokenizer.eos_token_id,
             )
-        response = self.tokenizer.decode(outputs)[0].split("Answer:")[1].strip().split("\n")[0].strip()
+        raw_response = self.tokenizer.decode(
+            outputs[0], skip_special_tokens=True
+        )
+        if isinstance(raw_response, list):
+            raw_response = raw_response[0]
+        response = (
+            raw_response.split("Answer:")[1].strip().split("\n")[0].strip()
+        )
         return MinimalAnswer(
             question_id=question.question_id,
             question=question.question,
